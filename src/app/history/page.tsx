@@ -1,16 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   History,
   AlertTriangle,
   CheckCircle,
-  Tag,
-  Users,
-  Clock,
-  Filter,
-  Check,
-  Edit2,
   RefreshCw,
 } from "lucide-react";
 
@@ -46,7 +40,7 @@ export default function HistoryPage() {
   const [overrideNotes, setOverrideNotes] = useState("");
   const [reviewing, setReviewing] = useState(false);
 
-  const fetchIssues = async () => {
+  const refreshIssues = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/issues?needsReview=${filterNeedsReview}`);
@@ -57,10 +51,28 @@ export default function HistoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterNeedsReview]);
 
   useEffect(() => {
-    fetchIssues();
+    let active = true;
+    fetch(`/api/issues?needsReview=${filterNeedsReview}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (active) {
+          setIssues(data.issues || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setIssues([]);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [filterNeedsReview]);
 
   const handleApprove = async (id: string) => {
@@ -71,7 +83,7 @@ export default function HistoryPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "approve" }),
       });
-      fetchIssues();
+      refreshIssues();
       setSelectedIssue(null);
     } finally {
       setReviewing(false);
@@ -93,7 +105,7 @@ export default function HistoryPage() {
           humanNotes: overrideNotes,
         }),
       });
-      fetchIssues();
+      refreshIssues();
       setSelectedIssue(null);
     } finally {
       setReviewing(false);
@@ -138,7 +150,7 @@ export default function HistoryPage() {
             <span>Needs Human Review</span>
           </button>
           <button
-            onClick={fetchIssues}
+            onClick={refreshIssues}
             className="p-1.5 rounded-lg border border-neutral-200 dark:border-neutral-800 text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
             title="Refresh"
           >

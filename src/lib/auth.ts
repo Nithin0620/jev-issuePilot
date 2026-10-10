@@ -1,4 +1,5 @@
 import { NextAuthOptions } from "next-auth";
+import { Adapter } from "next-auth/adapters";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import GithubProvider from "next-auth/providers/github";
 import GoogleProvider from "next-auth/providers/google";
@@ -6,8 +7,15 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 
+interface AuthUserWithRole {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  role?: string;
+}
+
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(db) as any,
+  adapter: PrismaAdapter(db) as unknown as Adapter,
   session: {
     strategy: "jwt",
   },
@@ -75,13 +83,13 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.role = (user as any).role ?? "member";
+        token.role = (user as AuthUserWithRole).role ?? "member";
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        (session.user as any).role = token.role;
+        (session.user as AuthUserWithRole).role = token.role as string;
       }
       return session;
     },

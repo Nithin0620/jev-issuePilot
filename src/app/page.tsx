@@ -2,11 +2,11 @@
 
 import React, { useState } from "react";
 import { IssueForm } from "@/components/IssueForm";
-import { DecisionCard } from "@/components/DecisionCard";
-import { ShieldCheck, ArrowDown, Activity } from "lucide-react";
+import { DecisionCard, DecisionCardProps } from "@/components/DecisionCard";
+import { ShieldCheck, ArrowDown } from "lucide-react";
 
 export default function HomePage() {
-  const [decision, setDecision] = useState<any>(null);
+  const [decision, setDecision] = useState<DecisionCardProps["decision"] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   return (
@@ -21,7 +21,7 @@ export default function HomePage() {
           Intelligent GitHub Issue Triage
         </h1>
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Evaluates incoming issues with Jev AI's structured decision model to compute classifications, rubric-based severity, and escalation probabilities with human review gates.
+          Evaluates incoming issues with Jev AI&apos;s structured decision model to compute classifications, rubric-based severity, and escalation probabilities with human review gates.
         </p>
       </div>
 

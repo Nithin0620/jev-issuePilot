@@ -6,10 +6,7 @@ import {
   CheckCircle2,
   Users,
   Tag,
-  Zap,
-  Activity,
   Cpu,
-  ArrowUpRight,
 } from "lucide-react";
 
 export interface DecisionCardProps {

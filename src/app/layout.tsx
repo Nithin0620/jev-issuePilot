@@ -5,7 +5,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Link from "next/link";
-import { Sparkles, History } from "lucide-react";
+import { History } from "lucide-react";
 
 const inter = Inter({ subsets: ["latin"] });
 

@@ -34,7 +34,7 @@ export async function PATCH(
     });
 
     return NextResponse.json({ success: true, issue: updated });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { error: "Could not update issue review" },
       { status: 500 }

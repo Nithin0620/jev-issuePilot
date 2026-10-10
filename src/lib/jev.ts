@@ -38,7 +38,7 @@ export function mockClassifyIssue(input: IssueInput): TriageResult {
   const isQuestion = /how do i|how to|question|where can i|is there a way|documentation|docs/i.test(text);
 
   let categoryChoice: "bug" | "feature" | "question" | "other" = "other";
-  let catConfidence = isAmbiguous ? 0.55 : 0.92;
+  const catConfidence = isAmbiguous ? 0.55 : 0.92;
 
   if (isBug) categoryChoice = "bug";
   else if (isFeature) categoryChoice = "feature";

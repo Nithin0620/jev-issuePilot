@@ -2,9 +2,10 @@
 
 import React, { useState } from "react";
 import { Send, Sparkles, RefreshCw } from "lucide-react";
+import { DecisionCardProps } from "./DecisionCard";
 
 export interface IssueFormProps {
-  onTriageSuccess: (result: any) => void;
+  onTriageSuccess: (result: DecisionCardProps["decision"]) => void;
   isLoading: boolean;
   setIsLoading: (val: boolean) => void;
 }
@@ -71,8 +72,8 @@ export function IssueForm({
       }
 
       onTriageSuccess(data);
-    } catch (err: any) {
-      setError(err.message || "An unexpected error occurred during triage");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred during triage");
     } finally {
       setIsLoading(false);
     }
@@ -85,7 +86,7 @@ export function IssueForm({
           <span>Submit Issue for AI Triage</span>
         </h2>
         <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-          IssuePilot evaluates text via Jev's structured decision model to classify category, estimate severity, and trigger safety review gates.
+          IssuePilot evaluates text via Jev&apos;s structured decision model to classify category, estimate severity, and trigger safety review gates.
         </p>
 
         {/* Preset Selectors */}

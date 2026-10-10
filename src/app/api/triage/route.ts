@@ -3,7 +3,7 @@ import { z } from "zod";
 import { classifyIssue } from "@/lib/jev";
 import { applyPolicy } from "@/lib/policy";
 import { db } from "@/lib/db";
-
+import { checkRateLimit } from "@/lib/ratelimit";
 
 const IssueSchema = z.object({
   title: z.string().trim().min(5, "Title must be at least 5 characters").max(200),
@@ -13,6 +13,21 @@ const IssueSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    const clientIp =
+      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "anonymous-client";
+    const rateLimit = checkRateLimit(`triage:${clientIp}`, { maxRequests: 60, windowMs: 60 * 1000 });
+
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please wait before submitting more issues." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil(rateLimit.resetInMs / 1000).toString(),
+          },
+        }
+      );
+    }
     const json = await request.json();
     const parsed = IssueSchema.safeParse(json);
 

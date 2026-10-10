@@ -1,0 +1,122 @@
+[
+  {
+    "id": "eval-1",
+    "title": "Critical Outage: 500 Internal Server Error across all billing endpoints",
+    "body": "All customers are unable to process transactions. Database connection pool exhausted.",
+    "expectedCategory": "bug",
+    "expectedSeverityTier": 3,
+    "expectedEscalation": true
+  },
+  {
+    "id": "eval-2",
+    "title": "Fatal crash on app launch for iOS 18 users",
+    "body": "SIGSEGV crash detected immediately upon launching the latest binary build 142.",
+    "expectedCategory": "bug",
+    "expectedSeverityTier": 3,
+    "expectedEscalation": true
+  },
+  {
+    "id": "eval-3",
+    "title": "Add support for dark mode in dashboard preferences",
+    "body": "It would be wonderful to toggle between dark and light themes with smooth transitions.",
+    "expectedCategory": "feature",
+    "expectedSeverityTier": 0,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-4",
+    "title": "Export table data to CSV format",
+    "body": "Users need an export button in the history table to download reports as CSV.",
+    "expectedCategory": "feature",
+    "expectedSeverityTier": 1,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-5",
+    "title": "How do I configure OAuth redirect URI for GitHub in production?",
+    "body": "I am following the docs but getting invalid redirect uri error on my custom domain.",
+    "expectedCategory": "question",
+    "expectedSeverityTier": 0,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-6",
+    "title": "Where are Docker compose persistent volume files stored on Linux?",
+    "body": "Need to know the host path for postgresql data backup.",
+    "expectedCategory": "question",
+    "expectedSeverityTier": 0,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-7",
+    "title": "Security vulnerability: JWT secret key hardcoded in client bundle",
+    "body": "Found raw auth secret exposed in public client javascript build.",
+    "expectedCategory": "bug",
+    "expectedSeverityTier": 3,
+    "expectedEscalation": true
+  },
+  {
+    "id": "eval-8",
+    "title": "Button text typo in settings modal",
+    "body": "The save button says 'Savve' instead of 'Save'. Minor text fix.",
+    "expectedCategory": "bug",
+    "expectedSeverityTier": 0,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-9",
+    "title": "Filter dropdown resets when navigating between pagination pages",
+    "body": "Selected priority filter is cleared whenever user clicks next page.",
+    "expectedCategory": "bug",
+    "expectedSeverityTier": 1,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-10",
+    "title": "Add webhook retry policy with exponential backoff",
+    "body": "When recipient server is temporarily unreachable, retry delivering the event.",
+    "expectedCategory": "feature",
+    "expectedSeverityTier": 1,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-11",
+    "title": "Payment gateway timeout causing duplicate charges",
+    "body": "Users are charged twice when the gateway takes longer than 10 seconds to respond.",
+    "expectedCategory": "bug",
+    "expectedSeverityTier": 3,
+    "expectedEscalation": true
+  },
+  {
+    "id": "eval-12",
+    "title": "Can we use Supabase PostgreSQL instead of local Docker?",
+    "body": "Does IssuePilot support hosted Postgres connection strings?",
+    "expectedCategory": "question",
+    "expectedSeverityTier": 0,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-13",
+    "title": "Keyboard shortcut to trigger quick theme toggle",
+    "body": "Pressing Cmd+J or Ctrl+J should switch between light and dark modes.",
+    "expectedCategory": "feature",
+    "expectedSeverityTier": 0,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-14",
+    "title": "API rate limiter returns HTTP 429 without Retry-After header",
+    "body": "The response status is 429 but the Retry-After header is missing from the response.",
+    "expectedCategory": "bug",
+    "expectedSeverityTier": 1,
+    "expectedEscalation": false
+  },
+  {
+    "id": "eval-15",
+    "title": "Database connection leak under high concurrent traffic",
+    "body": "Pool exhausted after 100 concurrent requests due to unclosed transaction in review handler.",
+    "expectedCategory": "bug",
+    "expectedSeverityTier": 3,
+    "expectedEscalation": true
+  }
+]

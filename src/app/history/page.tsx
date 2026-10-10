@@ -13,6 +13,8 @@ interface IssueItem {
   title: string;
   body: string;
   repository: string;
+  githubIssueNumber?: number;
+  githubSynced?: boolean;
   category: string;
   categoryConfidence: number;
   severity: number;
@@ -198,8 +200,14 @@ export default function HistoryPage() {
                       <div className="font-semibold text-neutral-900 dark:text-neutral-100 truncate">
                         {item.title}
                       </div>
-                      <div className="text-[11px] font-mono text-neutral-400 truncate">
-                        {item.repository}
+                      <div className="text-[11px] font-mono text-neutral-400 truncate flex items-center gap-2">
+                        <span>{item.repository}</span>
+                        {item.githubIssueNumber && (
+                          <span className="px-1.5 py-0.2 rounded border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 text-[10px]">
+                            #{item.githubIssueNumber}
+                            {item.githubSynced ? " • Synced" : " • Pending Sync"}
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-4 py-3">

@@ -5,7 +5,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/components/AuthProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Link from "next/link";
-import { History } from "lucide-react";
+import { History, BarChart3 } from "lucide-react";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -58,6 +58,13 @@ export default function RootLayout({
                     >
                       <History size={15} />
                       History & Reviews
+                    </Link>
+                    <Link
+                      href="/metrics"
+                      className="px-3 py-1.5 rounded-md text-neutral-600 hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white font-medium transition-colors flex items-center gap-1.5"
+                    >
+                      <BarChart3 size={15} />
+                      Metrics
                     </Link>
                   </nav>
                 </div>

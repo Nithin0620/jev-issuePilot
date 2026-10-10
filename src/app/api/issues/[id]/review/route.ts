@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-
+import { addLabelsToGitHubIssue } from "@/lib/github";
 
 const ReviewSchema = z.object({
   action: z.enum(["approve", "override"]),
@@ -23,6 +23,40 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid review payload" }, { status: 400 });
     }
 
+    const current = await db.issue.findUnique({
+      where: { id },
+    });
+
+    if (!current) {
+      return NextResponse.json({ error: "Issue not found" }, { status: 404 });
+    }
+
+    const finalCategory = parsed.data.humanCategory || current.category;
+    const finalPriority = parsed.data.humanPriority || current.priority;
+
+    const finalLabels = [
+      `type:${finalCategory}`,
+      `priority:${finalPriority}`,
+    ];
+
+    let isGithubSynced = current.githubSynced;
+
+    // Push confirmed labels to GitHub if issue has GitHub number and repository
+    if (current.githubIssueNumber && current.repository && current.repository.includes("/")) {
+      const [owner, repo] = current.repository.split("/");
+      if (owner && repo) {
+        const syncRes = await addLabelsToGitHubIssue({
+          owner,
+          repo,
+          issueNumber: current.githubIssueNumber,
+          labels: finalLabels,
+        });
+        if (syncRes.success) {
+          isGithubSynced = true;
+        }
+      }
+    }
+
     const updated = await db.issue.update({
       where: { id },
       data: {
@@ -30,6 +64,8 @@ export async function PATCH(
         humanCategory: parsed.data.humanCategory,
         humanPriority: parsed.data.humanPriority,
         humanNotes: parsed.data.humanNotes,
+        appliedLabels: finalLabels,
+        githubSynced: isGithubSynced,
       },
     });
 

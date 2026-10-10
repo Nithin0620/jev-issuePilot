@@ -13,41 +13,53 @@ IssuePilot is an engineering-first, AI-driven issue triage platform built with N
 - **Severity:** Rubric-based `score` (0–3 scale) with confidence.
 - **Escalation:** `noul` (yes/no probability) estimating whether an issue describes an immediate critical outage or security incident.
 
-The platform provides safety gates via explicit review thresholds, a human-in-the-loop review workflow, PostgreSQL audit logging, and containerized deployment with Docker. To enable 100% free development, automated testing, and CI without requiring paid API keys, IssuePilot includes an intelligent dual-mode architecture (Official `@typesafe-ai/sdk` with automatic fallback to a local heuristic mock engine).
+The platform provides safety gates via explicit review thresholds, a human-in-the-loop review workflow, PostgreSQL audit logging, live GitHub Webhook ingestion, automated GitHub label synchronization, and containerized deployment with Docker. To enable 100% free development, automated testing, and CI without requiring paid API keys, IssuePilot includes an intelligent dual-mode architecture (Official `@typesafe-ai/sdk` with automatic fallback to a local heuristic mock engine).
 
 ---
 
 ## 2. System Architecture
 
 ```
-[ Developer / Issue Reporter ]
-              │
-       (HTTP / Browser)
-              ▼
-    Next.js UI & API Layer
-    ├── Issue Submission Form (Manual Intake with Presets)
-    ├── /api/triage (Validation with Zod)
-    │        │
-    │        ▼
-    │   AI Engine Layer (src/lib/jev.ts)
-    │   ├── Live Mode: @typesafe-ai/sdk (Jev 1.13)
-    │   └── Mock Mode: Local Heuristic Mock Classifier
-    │        │
-    │        ▼
-    │   Policy Engine (src/lib/policy.ts)
-    │   ├── Confidence threshold check (< 0.75)
-    │   ├── Escalation threshold check (>= 0.85 -> critical)
-    │   ├── Borderline escalation check (0.60 to 0.85 -> review)
-    │   └── Team routing logic
-    │        │
-    │        ▼
-    │   Prisma ORM & PostgreSQL (src/lib/db.ts)
-    │   └── Decision Audit Logging & Human Overrides
-    │
-    ├── /history (Decision Audit & Human Review Queue)
-    │    ├── Review Queue (needsReview = true & humanReviewed = false)
-    │    └── Human Override & Review Modal (Accept / Override)
-    └── /api/health (System status, DB health, AI mode check)
+       [ GitHub Repository ]
+                 │
+      (Issue opened event)
+                 ▼
+   POST /api/webhooks/github
+   ├── Verify HMAC-SHA256 (GITHUB_WEBHOOK_SECRET)
+   └── Deduplicate delivery (X-GitHub-Delivery)
+                 │
+                 │
+                 ▼
+[ Manual Form / Webhook Intake ]
+                 │
+                 ▼
+        Next.js API & Services
+        ├── /api/triage (Zod validation)
+        │        │
+        │        ▼
+        │   AI Engine Layer (src/lib/jev.ts)
+        │   ├── Live Mode: @typesafe-ai/sdk (Jev 1.13)
+        │   └── Mock Mode: Local Heuristic Mock Classifier
+        │        │
+        │        ▼
+        │   Policy Engine (src/lib/policy.ts)
+        │   ├── Confidence threshold check (< 0.75)
+        │   ├── Escalation threshold check (>= 0.85 -> critical)
+        │   ├── Borderline escalation check (0.60 to 0.85 -> review)
+        │   └── Team routing & Label generator
+        │        │
+        │        ▼
+        │   Prisma ORM & PostgreSQL (src/lib/db.ts)
+        │        │
+        │        ├── If needsReview === false (High Confidence)
+        │        │   └── Automatic GitHub Label Sync via REST API
+        │        │
+        │        └── If needsReview === true (Uncertain / Escalation)
+        │            └── Hold in Review Queue for Human Approval
+        │
+        ├── /history Dashboard (Human Review & Override Queue)
+        │    └── Approving / Overriding triggers GitHub Label Sync
+        └── /api/health (System status, DB health, AI & GitHub sync mode)
 ```
 
 ---
@@ -59,6 +71,7 @@ The platform provides safety gates via explicit review thresholds, a human-in-th
 - **Styling:** Tailwind CSS
 - **Input Validation:** Zod
 - **AI SDK:** `@typesafe-ai/sdk` (with dual-mode Mock Engine fallback)
+- **GitHub Integration:** GitHub REST API (`@octokit/rest` or native fetch) with HMAC webhook signature validation
 - **ORM & Database:** Prisma 6 + PostgreSQL (compatible with local Docker and cloud Postgres providers like Supabase/Neon)
 - **Testing:** Vitest
 - **Containerization:** Multi-stage Dockerfile (`node:22-bookworm-slim`) & `compose.yaml`
@@ -78,7 +91,7 @@ export interface TriageResult {
       probabilities: Record<string, number>;
     };
     severity: {
-      score: number;
+      score: number; // 0 to 3 scale
       confidence: number;
     };
     needs_escalation: {
@@ -105,7 +118,7 @@ export interface TriageResult {
 
 ---
 
-## 5. Policy Engine & Review Rules (`src/lib/policy.ts`)
+## 5. Policy Engine & GitHub Labels (`src/lib/policy.ts`)
 
 The raw AI outputs are evaluated by `applyPolicy(answers)`:
 
@@ -124,6 +137,10 @@ The raw AI outputs are evaluated by `applyPolicy(answers)`:
    - `category === "feature"` $\to$ `"Product & UI"`
    - `category === "question"` $\to$ `"Developer Support"`
    - `other` $\to$ `"General Triage"`
+5. **Generated GitHub Labels:**
+   - Category label: `type:bug`, `type:feature`, `type:question`, `type:other`
+   - Priority label: `priority:critical`, `priority:high`, `priority:medium`, `priority:low`
+   - Team label: `team:platform`, `team:core-eng`, `team:product`, `team:support`
 
 ---
 
@@ -144,6 +161,12 @@ model Issue {
   title                 String
   body                  String
   repository            String?  @default("default")
+
+  // GitHub Metadata
+  githubIssueNumber     Int?
+  githubDeliveryId      String?  @unique
+  githubSynced          Boolean  @default(false)
+  appliedLabels         String[] @default([])
 
   // AI Decision Outputs
   category              String
@@ -172,56 +195,72 @@ model Issue {
 
   @@index([needsReview, humanReviewed])
   @@index([createdAt])
+  @@index([repository, githubIssueNumber])
 }
 ```
 
 ---
 
-## 7. API Routes & Endpoints
+## 7. GitHub Integration Service (`src/lib/github.ts`)
 
-1. **`POST /api/triage`**
-   - Validates `{ title, body, repository? }` with Zod (`title` min 5 max 200, `body` min 10 max 8000).
-   - Invokes triage engine (Jev or Mock).
-   - Applies policy.
-   - Persists issue record into PostgreSQL.
-   - Returns `{ id, model, answers, policy, createdAt }`.
-2. **`GET /api/issues`**
-   - Query params: `needsReview` (boolean), `limit`, `offset`.
-   - Returns list of persisted issues and review counts.
-3. **`PATCH /api/issues/[id]/review`**
-   - Body: `{ action: "approve" | "override", humanCategory?, humanPriority?, humanNotes? }`.
-   - Updates `humanReviewed = true` and saves corrections.
-4. **`GET /api/health`**
-   - Checks DB readiness and reports active AI provider mode (`live` or `mock`).
+- **Signature Verification:** Computes HMAC-SHA256 over raw request body using `GITHUB_WEBHOOK_SECRET` and performs timing-safe comparison with `X-Hub-Signature-256`.
+- **Add Labels to Issue:** `POST /repos/{owner}/{repo}/issues/{issue_number}/labels` using `GITHUB_TOKEN`. If `GITHUB_TOKEN` is not configured, logs the would-be labels safely in mock/simulation mode without failing.
+- **Auto-Sync Logic:**
+  - If `needsReview === false`: Automatically applies labels immediately upon triage.
+  - If `needsReview === true`: Holds labels in pending state until human reviewer approves in `/history`.
 
 ---
 
-## 8. Frontend Pages & Components
+## 8. API Routes & Endpoints
 
-- **`src/app/page.tsx`:** Triage console with sample preset buttons, issue submission form, and responsive live decision card displaying confidence bars, severity gauges, and review alerts.
+1. **`POST /api/webhooks/github`**
+   - Validates HMAC signature and filters for `action === "opened"` on `issues`.
+   - Checks `X-GitHub-Delivery` for deduplication.
+   - Executes triage pipeline and persists to PostgreSQL.
+   - If `needsReview === false`, automatically pushes labels to GitHub issue.
+2. **`POST /api/triage`**
+   - Manual intake endpoint validating `{ title, body, repository? }` with Zod.
+   - Executes triage pipeline and returns full decision payload.
+3. **`GET /api/issues`**
+   - Query params: `needsReview` (boolean), `limit`, `offset`.
+   - Returns list of persisted issues and review counts.
+4. **`PATCH /api/issues/[id]/review`**
+   - Body: `{ action: "approve" | "override", humanCategory?, humanPriority?, humanNotes? }`.
+   - Updates `humanReviewed = true`.
+   - Synchronizes final confirmed labels to GitHub if `githubIssueNumber` and `repository` exist.
+5. **`GET /api/health`**
+   - Checks DB readiness and reports active AI provider and GitHub sync status.
+
+---
+
+## 9. Frontend Pages & Components
+
+- **`src/app/page.tsx`:** Triage console with sample presets (Critical Outage, Ambiguous Bug, Feature Request, Question), manual submission form, and responsive live decision card.
 - **`src/app/history/page.tsx`:** Decision audit table with tabbed navigation:
   - *Needs Review* tab (filtered to `needsReview=true && humanReviewed=false`).
   - *All History* tab.
-  - Review action drawer/modal to confirm AI or submit human corrections.
+  - Review action drawer/modal with "Approve & Sync to GitHub" or "Override & Sync".
 - **`src/components/IssueForm.tsx`**, **`src/components/DecisionCard.tsx`**, **`src/components/HistoryTable.tsx`**.
 
 ---
 
-## 9. Testing & Verification
+## 10. Testing & Verification
 
 - **Policy Tests (`tests/policy.test.ts`):**
   - Confirms low confidence ($< 0.75$) triggers review.
   - Confirms borderline escalation ($0.60 \le p < 0.85$) triggers review.
   - Confirms high escalation ($\ge 0.85$) yields `critical` priority.
-  - Verifies severity mapping and team routing.
+  - Verifies label generation and team routing.
 - **Triage & Validation Tests (`tests/triage.test.ts`):**
-  - Validates Zod rejection on short titles/bodies.
+  - Validates Zod rejection on invalid input.
   - Verifies mock classifier schema compatibility with Jev SDK.
+- **Webhook Tests (`tests/webhook.test.ts`):**
+  - Verifies signature verification accepts valid HMAC and rejects forged payloads.
 
 ---
 
-## 10. Containerization & Production Readiness
+## 11. Containerization & Production Readiness
 
 - **Dockerfile:** Multi-stage Node 22 build with non-root security (`nextjs` UID 1001).
 - **compose.yaml:** Orchestrates PostgreSQL 16 container (with healthcheck) and app container.
-- **Environment Management:** `.env.example` documents all parameters; `.gitignore` guards sensitive credentials.
+- **Environment Management:** `.env.example` documents all parameters; `.gitignore` guards sensitive credentials (`TYPESAFE_API_KEY`, `GITHUB_TOKEN`, `GITHUB_WEBHOOK_SECRET`).

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 
-export const runtime = "nodejs";
 
 const ReviewSchema = z.object({
   action: z.enum(["approve", "override"]),

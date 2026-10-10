@@ -4,7 +4,6 @@ import { classifyIssue } from "@/lib/jev";
 import { applyPolicy } from "@/lib/policy";
 import { db } from "@/lib/db";
 
-export const runtime = "nodejs";
 
 const IssueSchema = z.object({
   title: z.string().trim().min(5, "Title must be at least 5 characters").max(200),

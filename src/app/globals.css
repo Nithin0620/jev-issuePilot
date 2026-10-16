@@ -4,19 +4,19 @@
 
 @layer base {
   :root {
-    --bg-primary: #ffffff;
-    --bg-secondary: #f7f7f8;
-    --text-primary: #0a0a0a;
-    --text-muted: #737373;
-    --border-subtle: #e5e5e5;
+    --bg-primary: #f8fafc;
+    --bg-secondary: #f1f5f9;
+    --text-primary: #0f172a;
+    --text-muted: #64748b;
+    --border-subtle: #e2e8f0;
   }
 
   .dark {
-    --bg-primary: #0a0a0a;
-    --bg-secondary: #141414;
-    --text-primary: #fafafa;
-    --text-muted: #a3a3a3;
-    --border-subtle: #262626;
+    --bg-primary: #07090e;
+    --bg-secondary: #0f131c;
+    --text-primary: #f8fafc;
+    --text-muted: #94a3b8;
+    --border-subtle: #1e293b;
   }
 
   html {
@@ -51,5 +51,134 @@
   input:disabled,
   [aria-disabled="true"] {
     cursor: not-allowed;
+  }
+}
+
+/* Glassmorphism & Metallic Custom Utilities */
+@layer utilities {
+  /* Glass Cards & Panels */
+  .glass-card {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05), inset 0 1px 0 0 rgba(255, 255, 255, 0.8);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .dark .glass-card {
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37), inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .glass-card:hover {
+    border-color: rgba(99, 102, 241, 0.4);
+    box-shadow: 0 12px 40px 0 rgba(99, 102, 241, 0.12), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+    transform: translateY(-2px);
+  }
+
+  .dark .glass-card:hover {
+    border-color: rgba(129, 140, 248, 0.35);
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.15);
+    transform: translateY(-2px);
+  }
+
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(20px) saturate(190%);
+    -webkit-backdrop-filter: blur(20px) saturate(190%);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+  }
+
+  .dark .glass-panel {
+    background: rgba(10, 14, 23, 0.75);
+    backdrop-filter: blur(20px) saturate(190%);
+    -webkit-backdrop-filter: blur(20px) saturate(190%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .glass-input {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(203, 213, 225, 0.8);
+    transition: all 0.2s ease;
+  }
+
+  .dark .glass-input {
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(51, 65, 85, 0.8);
+  }
+
+  .glass-input:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+  }
+
+  /* Metallic Buttons & Accents */
+  .metallic-btn {
+    background: linear-gradient(135deg, #27272a 0%, #09090b 50%, #18181b 100%);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s ease;
+  }
+
+  .dark .metallic-btn {
+    background: linear-gradient(135deg, #ffffff 0%, #e4e4e7 50%, #f4f4f5 100%);
+    color: #09090b;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    box-shadow: 0 2px 12px rgba(255, 255, 255, 0.15), inset 0 1px 0 rgba(255, 255, 255, 1);
+  }
+
+  .metallic-btn:hover {
+    box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .dark .metallic-btn:hover {
+    box-shadow: 0 4px 20px rgba(255, 255, 255, 0.3), inset 0 1px 0 rgba(255, 255, 255, 1);
+    transform: translateY(-1px);
+  }
+
+  .metallic-badge {
+    background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 50%, #f1f5f9 100%);
+    color: #0f172a;
+    border: 1px solid rgba(148, 163, 184, 0.5);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+
+  .dark .metallic-badge {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 50%, #334155 100%);
+    color: #f8fafc;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .metallic-card {
+    background: linear-gradient(145deg, rgba(255,255,255,0.85) 0%, rgba(241,245,249,0.7) 100%);
+    border: 1px solid rgba(203, 213, 225, 0.6);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.05), inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
+  }
+
+  .dark .metallic-card {
+    background: linear-gradient(145deg, rgba(30,41,59,0.6) 0%, rgba(15,23,42,0.8) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
+  }
+
+  /* Shimmer Hover & Glow */
+  .glow-hover {
+    transition: all 0.3s ease;
+  }
+
+  .glow-hover:hover {
+    box-shadow: 0 0 25px -5px rgba(99, 102, 241, 0.3);
   }
 }

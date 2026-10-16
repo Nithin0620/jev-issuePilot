@@ -13,6 +13,28 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: issuepilot
+          POSTGRES_PASSWORD: localpassword
+          POSTGRES_DB: issuepilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://issuepilot:localpassword@localhost:5432/issuepilot
+      MOCK_JEV: true
+      TYPESAFE_API_KEY: ci-placeholder
+      NEXTAUTH_SECRET: ci-secret-key-placeholder-32-chars-long
+      NEXTAUTH_URL: http://localhost:3000
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,8 +48,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate Prisma client
-        run: npx prisma generate
+      - name: Generate Prisma client & apply migrations
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
 
       - name: Run unit & integration tests
         run: npm test
@@ -37,9 +61,3 @@ jobs:
 
       - name: Verify production build
         run: npm run build
-        env:
-          TYPESAFE_API_KEY: ci-placeholder
-          MOCK_JEV: true
-          DATABASE_URL: postgresql://test:test@localhost:5432/test
-          NEXTAUTH_SECRET: ci-secret-key-placeholder-32-chars-long
-          NEXTAUTH_URL: http://localhost:3000

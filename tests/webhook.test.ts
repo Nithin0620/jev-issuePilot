@@ -1,13 +1,28 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import crypto from "crypto";
 import { POST } from "../src/app/api/webhooks/github/route";
+import { db } from "../src/lib/db";
 
 describe("POST /api/webhooks/github", () => {
   const secret = "test-webhook-secret-12345";
+  const createdDeliveryIds: string[] = [];
 
   beforeEach(() => {
     process.env.GITHUB_WEBHOOK_SECRET = secret;
     process.env.MOCK_JEV = "true";
+  });
+
+  afterEach(async () => {
+    if (createdDeliveryIds.length > 0) {
+      try {
+        await db.issue.deleteMany({
+          where: { githubDeliveryId: { in: createdDeliveryIds } },
+        });
+      } catch {
+        // Ignore if DB offline
+      }
+      createdDeliveryIds.length = 0;
+    }
   });
 
   it("rejects unauthorized webhook when signature is missing or invalid", async () => {
@@ -49,6 +64,8 @@ describe("POST /api/webhooks/github", () => {
 
   it("processes valid issue opened webhook and persists triage decision", async () => {
     const deliveryId = `delivery-${Date.now()}`;
+    createdDeliveryIds.push(deliveryId);
+
     const rawPayload = JSON.stringify({
       action: "opened",
       issue: {

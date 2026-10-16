@@ -6,13 +6,25 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const needsReviewOnly = searchParams.get("needsReview") === "true";
+    const repoFilter = searchParams.get("repository");
+    const priorityFilter = searchParams.get("priority");
+
+    const whereClause: Record<string, unknown> = {};
+    if (needsReviewOnly) {
+      whereClause.needsReview = true;
+      whereClause.humanReviewed = false;
+    }
+    if (repoFilter && repoFilter !== "all") {
+      whereClause.repository = repoFilter;
+    }
+    if (priorityFilter && priorityFilter !== "all") {
+      whereClause.priority = priorityFilter;
+    }
 
     const issues = await db.issue.findMany({
-      where: needsReviewOnly
-        ? { needsReview: true, humanReviewed: false }
-        : undefined,
+      where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: 100,
     });
 
     const pendingReviewCount = await db.issue.count({

@@ -15,25 +15,13 @@ const PRESETS = [
     label: "🚨 Production Outage",
     title: "Critical outage: 500 error on all checkout endpoints",
     body: "Every user attempting to checkout receives HTTP 500 Internal Server Error following the v2.4 deploy. Payment gateway connections are failing globally. Immediate escalation needed.",
-    repo: "acme/store-api",
+    repo: "acme-cloud/api-gateway",
   },
   {
     label: "❓ Ambiguous Bug",
     title: "Something weird happened in settings",
     body: "I clicked around the profile page and it looked broken or weird.",
-    repo: "acme/frontend",
-  },
-  {
-    label: "✨ Feature Request",
-    title: "Add dark mode toggle to preferences",
-    body: "Please add support for dark mode theme switching in user preferences with smooth animation transition.",
-    repo: "acme/design-system",
-  },
-  {
-    label: "💬 Documentation Question",
-    title: "How to configure Docker compose for Postgres?",
-    body: "Where is the documentation for setting up the local PostgreSQL container with volume persistence and healthcheck?",
-    repo: "acme/docs",
+    repo: "acme-cloud/api-gateway",
   },
 ];
 

@@ -24,14 +24,26 @@ export interface PolicyDecision {
   suggestedLabels: string[];
 }
 
-export function applyPolicy(answers: TriageAnswers): PolicyDecision {
+export interface PolicyOptions {
+  minConfidence?: number;
+  escalationThreshold?: number;
+  defaultTeam?: string;
+}
+
+export function applyPolicy(
+  answers: TriageAnswers,
+  options?: PolicyOptions
+): PolicyDecision {
+  const minConf = options?.minConfidence ?? 0.75;
+  const escThreshold = options?.escalationThreshold ?? 0.85;
+
   const lowConfidence =
-    answers.category.confidence < 0.75 || answers.severity.confidence < 0.75;
+    answers.category.confidence < minConf || answers.severity.confidence < minConf;
 
   const escalationProbability = answers.needs_escalation.noul;
 
   let priority: Priority;
-  if (escalationProbability >= 0.85) {
+  if (escalationProbability >= escThreshold) {
     priority = "critical";
   } else if (answers.severity.score >= 2.5) {
     priority = "high";
@@ -42,13 +54,13 @@ export function applyPolicy(answers: TriageAnswers): PolicyDecision {
   }
 
   const isBorderlineEscalation =
-    escalationProbability >= 0.6 && escalationProbability < 0.85;
+    escalationProbability >= 0.6 && escalationProbability < escThreshold;
 
-  let routingTeam = "General Triage";
+  let routingTeam = options?.defaultTeam || "General Triage";
   if (priority === "critical") {
     routingTeam = "Incident Response / Platform";
   } else if (answers.category.choice === "bug") {
-    routingTeam = "Core Engineering";
+    routingTeam = options?.defaultTeam || "Core Engineering";
   } else if (answers.category.choice === "feature") {
     routingTeam = "Product & UI";
   } else if (answers.category.choice === "question") {
@@ -69,3 +81,4 @@ export function applyPolicy(answers: TriageAnswers): PolicyDecision {
     suggestedLabels,
   };
 }
+

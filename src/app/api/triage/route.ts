@@ -42,7 +42,29 @@ export async function POST(request: Request) {
     }
 
     const triageResult = await classifyIssue(parsed.data);
-    const policy = applyPolicy(triageResult.answers);
+
+    let repoOptions: {
+      minConfidence?: number;
+      escalationThreshold?: number;
+      defaultTeam?: string;
+    } = {};
+
+    try {
+      const linkedRepo = await db.repository.findUnique({
+        where: { fullName: parsed.data.repository },
+      });
+      if (linkedRepo) {
+        repoOptions = {
+          minConfidence: linkedRepo.minConfidence,
+          escalationThreshold: linkedRepo.escalationThreshold,
+          defaultTeam: linkedRepo.defaultTeam,
+        };
+      }
+    } catch {
+      // Fallback to default policy thresholds
+    }
+
+    const policy = applyPolicy(triageResult.answers, repoOptions);
 
     // Persist to PostgreSQL (if DB is configured & online)
     let savedId: string | null = null;

@@ -98,3 +98,37 @@ model Issue {
   @@index([needsReview, humanReviewed])
   @@index([createdAt])
 }
+
+model Repository {
+  id                  String    @id @default(cuid())
+  fullName            String    @unique
+  name                String
+  owner               String
+  description         String?
+  language            String?   @default("TypeScript")
+  isPrivate           Boolean   @default(false)
+  connectionMode      String    @default("demo")
+  webhookActive       Boolean   @default(true)
+  autoSyncLabels      Boolean   @default(true)
+  minConfidence       Float     @default(0.75)
+  escalationThreshold Float     @default(0.85)
+  defaultTeam         String    @default("Core Engineering")
+  lastSyncedAt        DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model WorkspaceConfig {
+  id                   String   @id @default("default")
+  organizationName     String   @default("Acme Cloud Engineering")
+  githubConnected      Boolean  @default(false)
+  githubConnectionMode String   @default("none")
+  githubUsername       String?
+  githubTokenHint      String?
+  onboardingCompleted  Boolean  @default(false)
+  defaultMinConfidence Float    @default(0.75)
+  defaultEscalation    Float    @default(0.85)
+  autoSyncLabels       Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
+}
+

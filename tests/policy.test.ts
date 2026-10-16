@@ -50,4 +50,19 @@ describe("applyPolicy", () => {
     expect(result.needsReview).toBe(true);
     expect(result.priority).toBe("medium");
   });
+
+  it("respects custom per-repository minConfidence and escalationThreshold", () => {
+    const answers: TriageAnswers = {
+      category: { choice: "bug", confidence: 0.82 },
+      severity: { score: 2.0, confidence: 0.88 },
+      needs_escalation: { noul: 0.78 },
+    };
+    const result = applyPolicy(answers, {
+      minConfidence: 0.85,
+      escalationThreshold: 0.75,
+    });
+    expect(result.needsReview).toBe(true);
+    expect(result.priority).toBe("critical");
+  });
 });
+

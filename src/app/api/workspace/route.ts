@@ -32,8 +32,9 @@ export async function GET(request: Request) {
     autoSyncLabels: true,
   };
 
+  let dbConfig = null;
   try {
-    const dbConfig = await db.workspaceConfig.upsert({
+    dbConfig = await db.workspaceConfig.upsert({
       where: { id: "default" },
       update: {},
       create: {
@@ -55,18 +56,34 @@ export async function GET(request: Request) {
     // Fallback to default config if DB is unavailable
   }
 
-  const catalog = await fetchGitHubRepositories(tokenParam);
+  try {
+    const effectiveToken =
+      tokenParam || dbConfig?.githubToken || process.env.GITHUB_TOKEN || undefined;
+    const catalog = await fetchGitHubRepositories(effectiveToken);
 
-  return NextResponse.json({
-    config,
-    catalog: catalog.repositories,
-    catalogMode: catalog.mode,
-    aiEngineMode:
-      process.env.MOCK_JEV === "true" || !process.env.TYPESAFE_API_KEY
-        ? "mock/jev-deterministic-v1"
-        : "typesafe/jev-1.13",
-    webhookConfigured: Boolean(process.env.GITHUB_WEBHOOK_SECRET),
-  });
+    return NextResponse.json({
+      config: {
+        ...config,
+        githubToken: undefined, // Do not leak raw token to frontend
+      },
+      catalog: catalog.repositories,
+      catalogMode: catalog.mode,
+      aiEngineMode:
+        process.env.MOCK_JEV === "true" || !process.env.TYPESAFE_API_KEY
+          ? "mock/jev-deterministic-v1"
+          : "typesafe/jev-1.13",
+      webhookConfigured: Boolean(process.env.GITHUB_WEBHOOK_SECRET),
+    });
+  } catch {
+    const catalog = await fetchGitHubRepositories(tokenParam);
+    return NextResponse.json({
+      config,
+      catalog: catalog.repositories,
+      catalogMode: catalog.mode,
+      aiEngineMode: "mock/jev-deterministic-v1",
+      webhookConfigured: false,
+    });
+  }
 }
 
 export async function PATCH(request: Request) {
@@ -107,6 +124,7 @@ export async function PATCH(request: Request) {
             githubUsername: data.githubUsername,
           }),
           ...(tokenHint !== undefined && { githubTokenHint: tokenHint }),
+          ...(data.githubToken !== undefined && { githubToken: data.githubToken }),
           ...(data.onboardingCompleted !== undefined && {
             onboardingCompleted: data.onboardingCompleted,
           }),
@@ -127,6 +145,7 @@ export async function PATCH(request: Request) {
           githubConnectionMode: data.githubConnectionMode ?? "demo",
           githubUsername: data.githubUsername ?? "acme-cloud",
           githubTokenHint: tokenHint ?? null,
+          githubToken: data.githubToken ?? null,
           onboardingCompleted: data.onboardingCompleted ?? false,
           defaultMinConfidence: data.defaultMinConfidence ?? 0.75,
           defaultEscalation: data.defaultEscalation ?? 0.85,
@@ -134,7 +153,12 @@ export async function PATCH(request: Request) {
         },
       });
 
-      return NextResponse.json({ config: updated });
+      return NextResponse.json({
+        config: {
+          ...updated,
+          githubToken: undefined,
+        },
+      });
     } catch {
       return NextResponse.json({
         config: {

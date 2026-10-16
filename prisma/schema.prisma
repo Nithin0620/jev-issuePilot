@@ -125,6 +125,7 @@ model WorkspaceConfig {
   githubConnectionMode String   @default("none")
   githubUsername       String?
   githubTokenHint      String?
+  githubToken          String?
   onboardingCompleted  Boolean  @default(false)
   defaultMinConfidence Float    @default(0.75)
   defaultEscalation    Float    @default(0.85)

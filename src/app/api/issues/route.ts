@@ -9,6 +9,15 @@ export async function GET(request: Request) {
     const repoFilter = searchParams.get("repository");
     const priorityFilter = searchParams.get("priority");
 
+    const customRepoCount = await db.repository
+      .count({
+        where: {
+          fullName: { not: "acme-cloud/api-gateway" },
+          connectionMode: { not: "demo" },
+        },
+      })
+      .catch(() => 0);
+
     const whereClause: Record<string, unknown> = {};
     if (needsReviewOnly) {
       whereClause.needsReview = true;
@@ -16,6 +25,8 @@ export async function GET(request: Request) {
     }
     if (repoFilter && repoFilter !== "all") {
       whereClause.repository = repoFilter;
+    } else if (customRepoCount > 0) {
+      whereClause.repository = { not: "acme-cloud/api-gateway" };
     }
     if (priorityFilter && priorityFilter !== "all") {
       whereClause.priority = priorityFilter;
@@ -28,7 +39,15 @@ export async function GET(request: Request) {
     });
 
     const pendingReviewCount = await db.issue.count({
-      where: { needsReview: true, humanReviewed: false },
+      where: {
+        needsReview: true,
+        humanReviewed: false,
+        ...(customRepoCount > 0 && (!repoFilter || repoFilter === "all")
+          ? { repository: { not: "acme-cloud/api-gateway" } }
+          : repoFilter && repoFilter !== "all"
+          ? { repository: repoFilter }
+          : {}),
+      },
     });
 
     return NextResponse.json({

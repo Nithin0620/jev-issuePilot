@@ -40,7 +40,15 @@ export async function GET() {
       pendingCounts.map((item) => [item.repository || "default", item._count.repository])
     );
 
-    const enriched = repos.map((r) => ({
+    const hasCustomRepos = repos.some(
+      (r) => r.fullName !== "acme-cloud/api-gateway" && r.connectionMode !== "demo"
+    );
+
+    const filteredRepos = hasCustomRepos
+      ? repos.filter((r) => r.fullName !== "acme-cloud/api-gateway")
+      : repos;
+
+    const enriched = filteredRepos.map((r) => ({
       ...r,
       triagedCount: countMap.get(r.fullName) ?? 0,
       pendingReviewCount: pendingMap.get(r.fullName) ?? 0,
@@ -48,12 +56,12 @@ export async function GET() {
 
     return NextResponse.json({
       repositories: enriched,
-      availableCatalog: DEMO_GITHUB_REPOS,
+      availableCatalog: hasCustomRepos ? [] : DEMO_GITHUB_REPOS,
     });
   } catch {
     return NextResponse.json({
       repositories: [],
-      availableCatalog: DEMO_GITHUB_REPOS,
+      availableCatalog: [],
     });
   }
 }
@@ -77,6 +85,23 @@ export async function POST(request: Request) {
     const normalizedFullName = `${owner}/${name}`;
 
     try {
+      // If user connects a real custom repo, purge demo repo and its dummy issues
+      if (
+        normalizedFullName !== "acme-cloud/api-gateway" &&
+        data.connectionMode !== "demo"
+      ) {
+        await db.issue
+          .deleteMany({
+            where: { repository: "acme-cloud/api-gateway" },
+          })
+          .catch(() => {});
+        await db.repository
+          .deleteMany({
+            where: { fullName: "acme-cloud/api-gateway" },
+          })
+          .catch(() => {});
+      }
+
       const repo = await db.repository.upsert({
         where: { fullName: normalizedFullName },
         update: {

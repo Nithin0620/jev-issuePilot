@@ -64,7 +64,12 @@ export async function POST(
       );
     }
 
-    const fetched = await fetchGitHubRepoIssues(repo.fullName);
+    const ws = await db.workspaceConfig
+      .findUnique({ where: { id: "default" } })
+      .catch(() => null);
+    const token = ws?.githubToken || process.env.GITHUB_TOKEN || undefined;
+
+    const fetched = await fetchGitHubRepoIssues(repo.fullName, token);
     const createdIssues = [];
 
     for (const item of fetched.issues) {
@@ -99,6 +104,7 @@ export async function POST(
             repo: repo.name,
             issueNumber: item.number,
             labels: policy.suggestedLabels,
+            token,
           });
           githubSynced = syncRes.success;
         }

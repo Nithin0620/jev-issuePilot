@@ -3,25 +3,45 @@ import { db } from "@/lib/db";
 
 export async function GET() {
   try {
-    const totalIssues = await db.issue.count();
-    const needsReviewCount = await db.issue.count({ where: { needsReview: true } });
-    const humanReviewedCount = await db.issue.count({ where: { humanReviewed: true } });
+    const customRepoCount = await db.repository
+      .count({
+        where: {
+          fullName: { not: "acme-cloud/api-gateway" },
+          connectionMode: { not: "demo" },
+        },
+      })
+      .catch(() => 0);
+
+    const baseWhere =
+      customRepoCount > 0
+        ? { repository: { not: "acme-cloud/api-gateway" } }
+        : undefined;
+
+    const totalIssues = await db.issue.count({ where: baseWhere });
+    const needsReviewCount = await db.issue.count({
+      where: { ...baseWhere, needsReview: true },
+    });
+    const humanReviewedCount = await db.issue.count({
+      where: { ...baseWhere, humanReviewed: true },
+    });
 
     // Category distribution
     const categoryGroups = await db.issue.groupBy({
       by: ["category"],
+      where: baseWhere,
       _count: { category: true },
     });
 
     // Priority distribution
     const priorityGroups = await db.issue.groupBy({
       by: ["priority"],
+      where: baseWhere,
       _count: { priority: true },
     });
 
     // Check human overrides agreement
     const reviewedIssues = await db.issue.findMany({
-      where: { humanReviewed: true },
+      where: { ...baseWhere, humanReviewed: true },
       select: { category: true, humanCategory: true },
     });
 

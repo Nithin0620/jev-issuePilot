@@ -61,8 +61,9 @@ export async function addLabelsToGitHubIssue(input: {
   repo: string;
   issueNumber: number;
   labels: string[];
+  token?: string;
 }): Promise<{ success: boolean; labelsAdded: string[]; simulated?: boolean }> {
-  const token = process.env.GITHUB_TOKEN;
+  const token = input.token || process.env.GITHUB_TOKEN;
 
   if (!token) {
     console.info(
@@ -213,9 +214,15 @@ export async function fetchGitHubRepoIssues(
   fullName: string,
   token?: string
 ): Promise<{ mode: "live" | "demo"; issues: SyncedGitHubIssueInput[] }> {
+  const isDemoRepo =
+    fullName === "acme-cloud/api-gateway" || fullName.startsWith("acme-cloud/");
   const activeToken = token || process.env.GITHUB_TOKEN;
+
   if (!activeToken) {
-    return { mode: "demo", issues: getDemoIssuesForRepo(fullName) };
+    return {
+      mode: isDemoRepo ? "demo" : "live",
+      issues: isDemoRepo ? getDemoIssuesForRepo(fullName) : [],
+    };
   }
 
   try {
@@ -231,7 +238,13 @@ export async function fetchGitHubRepoIssues(
     );
 
     if (!res.ok) {
-      return { mode: "demo", issues: getDemoIssuesForRepo(fullName) };
+      console.warn(
+        `[GitHub API] Failed to fetch issues for ${fullName} (${res.status} ${res.statusText})`
+      );
+      return {
+        mode: isDemoRepo ? "demo" : "live",
+        issues: isDemoRepo ? getDemoIssuesForRepo(fullName) : [],
+      };
     }
 
     const data = (await res.json()) as Array<{
@@ -241,23 +254,34 @@ export async function fetchGitHubRepoIssues(
       pull_request?: unknown;
     }>;
 
-    const onlyIssues = data
-      .filter((item) => !item.pull_request)
-      .map((item) => ({
-        number: item.number,
-        title: item.title,
-        body:
-          item.body && item.body.trim().length >= 10
-            ? item.body
-            : `${item.title} — imported from GitHub repository ${fullName}.`,
-      }));
+    const onlyIssues = Array.isArray(data)
+      ? data
+          .filter((item) => !item.pull_request)
+          .map((item) => ({
+            number: item.number,
+            title: item.title,
+            body:
+              item.body && item.body.trim().length >= 10
+                ? item.body
+                : `${item.title} — imported from GitHub repository ${fullName}.`,
+          }))
+      : [];
 
     return {
       mode: "live",
-      issues: onlyIssues.length > 0 ? onlyIssues : getDemoIssuesForRepo(fullName),
+      issues:
+        onlyIssues.length > 0
+          ? onlyIssues
+          : isDemoRepo
+          ? getDemoIssuesForRepo(fullName)
+          : [],
     };
-  } catch {
-    return { mode: "demo", issues: getDemoIssuesForRepo(fullName) };
+  } catch (error) {
+    console.warn(`[GitHub API] Network/parsing error fetching issues for ${fullName}:`, error);
+    return {
+      mode: isDemoRepo ? "demo" : "live",
+      issues: isDemoRepo ? getDemoIssuesForRepo(fullName) : [],
+    };
   }
 }
 

@@ -35,9 +35,7 @@ export default function OnboardingPage() {
   const [githubToken, setGithubToken] = useState("");
   const [orgName, setOrgName] = useState("Acme Cloud Engineering");
   const [catalog, setCatalog] = useState<CatalogRepo[]>([]);
-  const [selectedRepos, setSelectedRepos] = useState<string[]>([
-    "acme-cloud/api-gateway",
-  ]);
+  const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
   const [minConfidence, setMinConfidence] = useState(0.75);
   const [escalationThreshold, setEscalationThreshold] = useState(0.85);
   const [autoSyncLabels, setAutoSyncLabels] = useState(true);
@@ -70,7 +68,7 @@ export default function OnboardingPage() {
       const data = await res.json();
       if (Array.isArray(data?.catalog)) {
         setCatalog(data.catalog);
-        setSelectedRepos(data.catalog.slice(0, 3).map((r: CatalogRepo) => r.fullName));
+        setSelectedRepos(data.catalog.slice(0, 1).map((r: CatalogRepo) => r.fullName));
       }
       setStep(2);
     } finally {
@@ -90,8 +88,13 @@ export default function OnboardingPage() {
       );
       const data = await res.json();
       if (Array.isArray(data?.catalog)) {
-        setCatalog(data.catalog);
-        setSelectedRepos(data.catalog.slice(0, 3).map((r: CatalogRepo) => r.fullName));
+        // Exclude demo testing repos from user's live catalog
+        const userRepos = data.catalog.filter(
+          (r: CatalogRepo) => r.fullName !== "acme-cloud/api-gateway"
+        );
+        const finalCatalog = userRepos.length > 0 ? userRepos : data.catalog;
+        setCatalog(finalCatalog);
+        setSelectedRepos(finalCatalog.slice(0, 1).map((r: CatalogRepo) => r.fullName));
       }
       setStep(2);
     } finally {

@@ -5,8 +5,8 @@ import { DEMO_GITHUB_REPOS } from "@/lib/github";
 
 const CreateRepoSchema = z.object({
   fullName: z.string().trim().min(3).max(200),
-  description: z.string().max(500).optional(),
-  language: z.string().max(80).optional().default("TypeScript"),
+  description: z.string().max(2000).nullable().optional(),
+  language: z.string().max(100).nullable().optional().default("TypeScript"),
   isPrivate: z.boolean().optional().default(false),
   connectionMode: z.enum(["demo", "pat", "oauth"]).optional().default("demo"),
   webhookActive: z.boolean().optional().default(true),
@@ -109,7 +109,8 @@ export async function POST(request: Request) {
       });
 
       return NextResponse.json({ repository: repo }, { status: 201 });
-    } catch {
+    } catch (upsertError) {
+      console.error("[POST /api/repos] Upsert DB error:", upsertError);
       return NextResponse.json(
         {
           repository: {
@@ -123,7 +124,8 @@ export async function POST(request: Request) {
         { status: 201 }
       );
     }
-  } catch {
+  } catch (err) {
+    console.error("[POST /api/repos] Unhandled error:", err);
     return NextResponse.json(
       { error: "Failed to link repository" },
       { status: 500 }

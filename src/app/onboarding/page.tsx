@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   Lock,
   Globe,
+  AlertCircle,
 } from "lucide-react";
 
 interface CatalogRepo {
@@ -44,6 +45,7 @@ export default function OnboardingPage() {
   const [loadingCatalog, setLoadingCatalog] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [statusText, setStatusText] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/workspace")
@@ -62,6 +64,7 @@ export default function OnboardingPage() {
   const handleConnectDemo = async () => {
     setConnectionMode("demo");
     setLoadingCatalog(true);
+    setErrorMessage(null);
     try {
       const res = await fetch("/api/workspace");
       const data = await res.json();
@@ -80,6 +83,7 @@ export default function OnboardingPage() {
     if (!githubToken.trim()) return;
     setConnectionMode("pat");
     setLoadingCatalog(true);
+    setErrorMessage(null);
     try {
       const res = await fetch(
         `/api/workspace?token=${encodeURIComponent(githubToken.trim())}`
@@ -105,9 +109,10 @@ export default function OnboardingPage() {
 
   const handleFinishOnboarding = async () => {
     setSubmitting(true);
+    setErrorMessage(null);
     try {
       setStatusText("Saving workspace configuration...");
-      await fetch("/api/workspace", {
+      const wsRes = await fetch("/api/workspace", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -123,12 +128,28 @@ export default function OnboardingPage() {
         }),
       });
 
-      const chosenCatalogItems = catalog.filter((c) =>
-        selectedRepos.includes(c.fullName)
-      );
+      if (!wsRes.ok) {
+        const wsData = await wsRes.json().catch(() => ({}));
+        throw new Error(
+          wsData.error || `Failed to configure workspace (HTTP ${wsRes.status})`
+        );
+      }
+
+      // Map selected repos to valid payload, falling back to defaults if not in catalog
+      const reposToLink = selectedRepos.map((repoFullName) => {
+        const found = catalog.find((c) => c.fullName === repoFullName);
+        return {
+          fullName: repoFullName,
+          description:
+            found?.description || `Connected GitHub repository ${repoFullName}`,
+          language: found?.language || "TypeScript",
+          isPrivate: found?.isPrivate ?? false,
+          defaultTeam: found?.defaultTeam || "Core Engineering",
+        };
+      });
 
       const createdRepoIds: string[] = [];
-      for (const repoItem of chosenCatalogItems) {
+      for (const repoItem of reposToLink) {
         setStatusText(`Linking ${repoItem.fullName}...`);
         const res = await fetch("/api/repos", {
           method: "POST",
@@ -143,10 +164,19 @@ export default function OnboardingPage() {
             autoSyncLabels,
             minConfidence,
             escalationThreshold,
-            defaultTeam: repoItem.defaultTeam || "Core Engineering",
+            defaultTeam: repoItem.defaultTeam,
           }),
         });
-        const data = await res.json();
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(
+            data.error ||
+              data.details ||
+              `Failed to link repository "${repoItem.fullName}" (HTTP ${res.status})`
+          );
+        }
+
         if (data?.repository?.id) {
           createdRepoIds.push(data.repository.id);
         }
@@ -156,13 +186,24 @@ export default function OnboardingPage() {
         setStatusText("Importing & triaging open GitHub issues with Jev 1.13...");
         await Promise.all(
           createdRepoIds.slice(0, 2).map((id) =>
-            fetch(`/api/repos/${id}/sync`, { method: "POST" })
+            fetch(`/api/repos/${id}/sync`, { method: "POST" }).catch((err) => {
+              console.warn(`Sync warning for repo ${id}:`, err);
+              return null;
+            })
           )
         );
       }
 
+      setStatusText("Setup complete! Launching Command Center...");
       router.push("/dashboard");
       router.refresh();
+    } catch (err: unknown) {
+      console.error("Onboarding failed:", err);
+      const message =
+        err instanceof Error
+          ? err.message
+          : "An error occurred while linking repositories. Please check database connectivity and try again.";
+      setErrorMessage(message);
     } finally {
       setSubmitting(false);
     }
@@ -509,6 +550,18 @@ export default function OnboardingPage() {
               </div>
             </label>
           </div>
+
+          {errorMessage && (
+            <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 flex items-start gap-3 text-xs leading-relaxed">
+              <AlertCircle size={18} className="shrink-0 mt-0.5 text-rose-500" />
+              <div className="space-y-1">
+                <div className="font-bold uppercase tracking-wider text-[11px]">
+                  Repository Linking Failed
+                </div>
+                <p>{errorMessage}</p>
+              </div>
+            </div>
+          )}
 
           {submitting && statusText && (
             <div className="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 flex items-center gap-2.5 text-xs font-mono text-neutral-600 dark:text-neutral-300">

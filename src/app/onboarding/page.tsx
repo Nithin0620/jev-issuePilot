@@ -1,604 +1,293 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  GitBranch,
   CheckCircle2,
-  Sliders,
   Sparkles,
-  KeyRound,
   ArrowRight,
-  ArrowLeft,
   RefreshCw,
-  ShieldCheck,
-  Lock,
-  Globe,
-  AlertCircle,
 } from "lucide-react";
-
-interface CatalogRepo {
-  fullName: string;
-  name: string;
-  owner: string;
-  description: string;
-  language: string;
-  isPrivate: boolean;
-  openIssuesCount: number;
-  defaultTeam: string;
-}
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [connectionMode, setConnectionMode] = useState<"demo" | "pat">("demo");
-  const [githubToken, setGithubToken] = useState("");
+  const [patToken, setPatToken] = useState("");
   const [orgName, setOrgName] = useState("Acme Cloud Engineering");
-  const [catalog, setCatalog] = useState<CatalogRepo[]>([]);
-  const [selectedRepos, setSelectedRepos] = useState<string[]>([]);
+  const [selectedRepos, setSelectedRepos] = useState<string[]>([
+    "acme-cloud/payments-engine",
+    "acme-cloud/web-dashboard",
+  ]);
   const [minConfidence, setMinConfidence] = useState(0.75);
   const [escalationThreshold, setEscalationThreshold] = useState(0.85);
-  const [autoSyncLabels, setAutoSyncLabels] = useState(true);
-  const [syncInitialIssues, setSyncInitialIssues] = useState(true);
-  const [loadingCatalog, setLoadingCatalog] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [statusText, setStatusText] = useState("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [autoSync] = useState(true);
+  const [finishing, setFinishing] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/workspace")
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data?.catalog)) {
-          setCatalog(data.catalog);
-        }
-        if (data?.config?.organizationName) {
-          setOrgName(data.config.organizationName);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  const handleConnectDemo = async () => {
-    setConnectionMode("demo");
-    setLoadingCatalog(true);
-    setErrorMessage(null);
-    try {
-      const res = await fetch("/api/workspace");
-      const data = await res.json();
-      if (Array.isArray(data?.catalog)) {
-        setCatalog(data.catalog);
-        setSelectedRepos(data.catalog.slice(0, 1).map((r: CatalogRepo) => r.fullName));
-      }
-      setStep(2);
-    } finally {
-      setLoadingCatalog(false);
-    }
-  };
-
-  const handleConnectPat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!githubToken.trim()) return;
-    setConnectionMode("pat");
-    setLoadingCatalog(true);
-    setErrorMessage(null);
-    try {
-      const res = await fetch(
-        `/api/workspace?token=${encodeURIComponent(githubToken.trim())}`
-      );
-      const data = await res.json();
-      if (Array.isArray(data?.catalog)) {
-        // Exclude demo testing repos from user's live catalog
-        const userRepos = data.catalog.filter(
-          (r: CatalogRepo) => r.fullName !== "acme-cloud/api-gateway"
-        );
-        const finalCatalog = userRepos.length > 0 ? userRepos : data.catalog;
-        setCatalog(finalCatalog);
-        setSelectedRepos(finalCatalog.slice(0, 1).map((r: CatalogRepo) => r.fullName));
-      }
-      setStep(2);
-    } finally {
-      setLoadingCatalog(false);
-    }
-  };
+  const DEMO_REPOS = [
+    {
+      fullName: "acme-cloud/payments-engine",
+      description: "Core Stripe & ledger processing pipeline in Node.js",
+      isPrivate: true,
+      openIssues: 12,
+    },
+    {
+      fullName: "acme-cloud/web-dashboard",
+      description: "Next.js frontend app for SaaS customers",
+      isPrivate: false,
+      openIssues: 5,
+    },
+    {
+      fullName: "acme-cloud/api-gateway",
+      description: "Edge proxy and rate limiting gateway",
+      isPrivate: true,
+      openIssues: 8,
+    },
+  ];
 
   const toggleRepo = (fullName: string) => {
-    setSelectedRepos((prev) =>
-      prev.includes(fullName)
-        ? prev.filter((item) => item !== fullName)
-        : [...prev, fullName]
-    );
+    if (selectedRepos.includes(fullName)) {
+      setSelectedRepos(selectedRepos.filter((r) => r !== fullName));
+    } else {
+      setSelectedRepos([...selectedRepos, fullName]);
+    }
   };
 
-  const handleFinishOnboarding = async () => {
-    setSubmitting(true);
-    setErrorMessage(null);
+  const handleFinish = async () => {
+    setFinishing(true);
     try {
-      setStatusText("Saving workspace configuration...");
-      const wsRes = await fetch("/api/workspace", {
-        method: "PATCH",
+      await fetch("/api/workspace", {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          organizationName: orgName,
-          githubConnected: true,
-          githubConnectionMode: connectionMode,
-          githubUsername: connectionMode === "demo" ? "acme-cloud" : "github-user",
-          ...(githubToken.trim() ? { githubToken: githubToken.trim() } : {}),
-          onboardingCompleted: true,
-          defaultMinConfidence: minConfidence,
-          defaultEscalation: escalationThreshold,
-          autoSyncLabels,
+          orgName,
+          minConfidence,
+          escalationThreshold,
+          autoSyncLabels: autoSync,
         }),
       });
 
-      if (!wsRes.ok) {
-        const wsData = await wsRes.json().catch(() => ({}));
-        throw new Error(
-          wsData.error || `Failed to configure workspace (HTTP ${wsRes.status})`
-        );
-      }
-
-      // Map selected repos to valid payload, falling back to defaults if not in catalog
-      const reposToLink = selectedRepos.map((repoFullName) => {
-        const found = catalog.find((c) => c.fullName === repoFullName);
-        return {
-          fullName: repoFullName,
-          description:
-            found?.description || `Connected GitHub repository ${repoFullName}`,
-          language: found?.language || "TypeScript",
-          isPrivate: found?.isPrivate ?? false,
-          defaultTeam: found?.defaultTeam || "Core Engineering",
-        };
-      });
-
-      const createdRepoIds: string[] = [];
-      for (const repoItem of reposToLink) {
-        setStatusText(`Linking ${repoItem.fullName}...`);
-        const res = await fetch("/api/repos", {
+      for (const repoName of selectedRepos) {
+        await fetch("/api/repos", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            fullName: repoItem.fullName,
-            description: repoItem.description,
-            language: repoItem.language,
-            isPrivate: repoItem.isPrivate,
-            connectionMode,
-            webhookActive: true,
-            autoSyncLabels,
-            minConfidence,
-            escalationThreshold,
-            defaultTeam: repoItem.defaultTeam,
-          }),
+          body: JSON.stringify({ fullName: repoName }),
         });
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(
-            data.error ||
-              data.details ||
-              `Failed to link repository "${repoItem.fullName}" (HTTP ${res.status})`
-          );
-        }
-
-        if (data?.repository?.id) {
-          createdRepoIds.push(data.repository.id);
-        }
       }
 
-      if (syncInitialIssues && createdRepoIds.length > 0) {
-        setStatusText("Importing & triaging open GitHub issues with Jev 1.13...");
-        await Promise.all(
-          createdRepoIds.slice(0, 2).map((id) =>
-            fetch(`/api/repos/${id}/sync`, { method: "POST" }).catch((err) => {
-              console.warn(`Sync warning for repo ${id}:`, err);
-              return null;
-            })
-          )
-        );
-      }
-
-      setStatusText("Setup complete! Launching Command Center...");
       router.push("/dashboard");
-      router.refresh();
-    } catch (err: unknown) {
-      console.error("Onboarding failed:", err);
-      const message =
-        err instanceof Error
-          ? err.message
-          : "An error occurred while linking repositories. Please check database connectivity and try again.";
-      setErrorMessage(message);
+    } catch (e) {
+      console.error(e);
     } finally {
-      setSubmitting(false);
+      setFinishing(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-8 py-10 space-y-8">
-      {/* Header & Step Progress */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-neutral-200 dark:border-neutral-800 pb-6">
-        <div>
-          <div className="inline-flex items-center gap-1.5 text-xs font-mono uppercase text-emerald-600 dark:text-emerald-400">
-            <ShieldCheck size={14} />
-            <span>Workspace Setup Wizard</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-neutral-900 dark:text-white mt-1">
-            Connect GitHub & Configure AI Triage
-          </h1>
-        </div>
-
-        {/* Stepper Pills */}
-        <div className="flex items-center gap-2 text-xs font-mono">
-          {[
-            { num: 1, label: "1. GitHub Auth" },
-            { num: 2, label: "2. Link Repos" },
-            { num: 3, label: "3. Safety Policy" },
-          ].map((item) => (
-            <div
-              key={item.num}
-              className={`px-3 py-1.5 rounded-lg border transition-colors ${
-                step === item.num
-                  ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-950 border-neutral-900 dark:border-white font-bold"
-                  : step > item.num
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                  : "border-neutral-200 dark:border-neutral-800 text-neutral-400"
-              }`}
-            >
-              {item.label}
-            </div>
-          ))}
-        </div>
+    <div className="max-w-4xl mx-auto px-4 sm:px-8 py-12 space-y-8">
+      {/* Step Header */}
+      <div className="text-center space-y-2">
+        <h1 className="text-3xl font-extrabold tracking-tight text-neutral-900 dark:text-white flex items-center justify-center gap-2.5">
+          <Sparkles className="text-indigo-500" size={28} />
+          <span>IssuePilot Workspace Onboarding</span>
+        </h1>
+        <p className="text-xs sm:text-sm text-neutral-500">
+          Set up your GitHub integrations and safety gate thresholds in 3 easy steps.
+        </p>
       </div>
 
-      {/* STEP 1: Connect GitHub */}
+      {/* Progress Indicators */}
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { num: 1, label: "GitHub Auth" },
+          { num: 2, label: "Select Repos" },
+          { num: 3, label: "Confidence Gates" },
+        ].map((s) => (
+          <div
+            key={s.num}
+            className={`p-3 rounded-xl text-center text-xs font-semibold transition-all ${
+              step === s.num
+                ? "metallic-btn"
+                : step > s.num
+                ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40"
+                : "glass-card text-neutral-400"
+            }`}
+          >
+            {s.num}. {s.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Step 1: PAT / Org Name */}
       {step === 1 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Option 1: 1-Click Demo GitHub Organization */}
-          <div className="rounded-2xl border-2 border-emerald-500/40 bg-white dark:bg-neutral-950 p-6 sm:p-8 flex flex-col justify-between space-y-6 shadow-xs">
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
-                <Sparkles size={13} />
-                <span>Recommended for Instant Evaluation</span>
-              </div>
-              <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
-                Connect Demo GitHub Org (acme-cloud)
-              </h2>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                Instantly link 5 realistic engineering repositories (API Gateway, Web Dashboard, Payments Engine, Auth Service, TypeScript SDK) with simulated GitHub webhooks and live Jev triage.
-              </p>
-              <ul className="space-y-1.5 text-xs text-neutral-600 dark:text-neutral-300 pt-2">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-500" />
-                  <span>Pre-loaded microservices & realistic GitHub issues</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-500" />
-                  <span>Full webhook & 2-way label sync simulation</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={14} className="text-emerald-500" />
-                  <span>No external GitHub credentials required</span>
-                </li>
-              </ul>
+        <div className="p-8 rounded-2xl glass-card space-y-6">
+          <h2 className="text-lg font-bold text-neutral-900 dark:text-white">
+            1. Connect Workspace & GitHub Access
+          </h2>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase text-neutral-500 mb-1">
+                Workspace / Organization Name
+              </label>
+              <input
+                type="text"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs"
+              />
             </div>
 
-            <button
-              type="button"
-              onClick={handleConnectDemo}
-              disabled={loadingCatalog}
-              className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 font-semibold text-sm hover:opacity-90 transition-opacity"
-            >
-              {loadingCatalog ? (
-                <RefreshCw size={16} className="animate-spin" />
-              ) : (
-                <>
-                  <GitBranch size={16} />
-                  <span>Connect Demo GitHub Account</span>
-                  <ArrowRight size={16} />
-                </>
-              )}
-            </button>
+            <div>
+              <label className="block text-xs font-semibold uppercase text-neutral-500 mb-1">
+                GitHub Personal Access Token (Optional for demo)
+              </label>
+              <input
+                type="password"
+                value={patToken}
+                onChange={(e) => setPatToken(e.target.value)}
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                className="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs font-mono"
+              />
+            </div>
           </div>
 
-          {/* Option 2: Live GitHub Personal Access Token */}
-          <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 sm:p-8 flex flex-col justify-between space-y-6">
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 text-xs font-medium">
-                <KeyRound size={13} />
-                <span>Live GitHub REST API</span>
-              </div>
-              <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
-                Connect Real GitHub Account (PAT)
-              </h2>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                Provide a GitHub Personal Access Token with <code className="font-mono">repo</code> and <code className="font-mono">issues</code> scope to fetch your actual repositories, import open issues, and push triage labels directly.
-              </p>
-
-              <form onSubmit={handleConnectPat} className="space-y-3 pt-2">
-                <div>
-                  <label className="block text-[11px] font-mono uppercase text-neutral-500 mb-1">
-                    Organization / Workspace Name
-                  </label>
-                  <input
-                    type="text"
-                    value={orgName}
-                    onChange={(e) => setOrgName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-mono uppercase text-neutral-500 mb-1">
-                    GitHub Personal Access Token
-                  </label>
-                  <input
-                    type="password"
-                    value={githubToken}
-                    onChange={(e) => setGithubToken(e.target.value)}
-                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                    required
-                    className="w-full px-3 py-2 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 font-mono text-xs"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={loadingCatalog || !githubToken.trim()}
-                  className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800 text-neutral-900 dark:text-white font-semibold text-sm transition-colors disabled:opacity-50"
-                >
-                  <span>Fetch My GitHub Repositories</span>
-                  <ArrowRight size={15} />
-                </button>
-              </form>
-            </div>
+          <div className="pt-4 flex justify-end">
+            <button
+              onClick={() => setStep(2)}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl metallic-btn text-xs font-semibold hover:scale-105 active:scale-95 transition-all"
+            >
+              <span>Continue to Repo Selection</span>
+              <ArrowRight size={15} />
+            </button>
           </div>
         </div>
       )}
 
-      {/* STEP 2: Select Repositories */}
+      {/* Step 2: Select Repos */}
       {step === 2 && (
-        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 sm:p-8 space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-bold text-neutral-900 dark:text-white">
-                Select Repositories to Monitor ({selectedRepos.length} selected)
-              </h2>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                IssuePilot will attach webhook listeners and apply structured AI triage to selected repositories.
-              </p>
-            </div>
+        <div className="p-8 rounded-2xl glass-card space-y-6">
+          <h2 className="text-lg font-bold text-neutral-900 dark:text-white">
+            2. Select Repositories for AI Triage
+          </h2>
 
-            <button
-              type="button"
-              onClick={() =>
-                setSelectedRepos(
-                  selectedRepos.length === catalog.length
-                    ? []
-                    : catalog.map((r) => r.fullName)
-                )
-              }
-              className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 hover:underline"
-            >
-              {selectedRepos.length === catalog.length ? "Deselect All" : "Select All"}
-            </button>
-          </div>
-
-          <div className="divide-y divide-neutral-200 dark:divide-neutral-800 border border-neutral-200 dark:border-neutral-800 rounded-xl overflow-hidden">
-            {catalog.map((repo) => {
-              const isSelected = selectedRepos.includes(repo.fullName);
+          <div className="space-y-3">
+            {DEMO_REPOS.map((r) => {
+              const checked = selectedRepos.includes(r.fullName);
               return (
-                <label
-                  key={repo.fullName}
-                  className={`flex items-start justify-between gap-4 p-4 cursor-pointer transition-colors ${
-                    isSelected
-                      ? "bg-emerald-500/5 dark:bg-emerald-500/10"
-                      : "hover:bg-neutral-50 dark:hover:bg-neutral-900/50"
+                <div
+                  key={r.fullName}
+                  onClick={() => toggleRepo(r.fullName)}
+                  className={`p-4 rounded-xl metallic-card flex items-center justify-between cursor-pointer transition-all ${
+                    checked ? "border-indigo-500/50" : ""
                   }`}
                 >
-                  <div className="flex items-start gap-3.5">
+                  <div className="flex items-center gap-3">
                     <input
                       type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleRepo(repo.fullName)}
-                      className="mt-1 h-4 w-4 rounded border-neutral-300"
+                      checked={checked}
+                      onChange={() => {}}
+                      className="h-4 w-4 rounded accent-indigo-500"
                     />
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-bold text-neutral-900 dark:text-white">
-                          {repo.fullName}
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border border-neutral-200 dark:border-neutral-800 text-neutral-500">
-                          {repo.isPrivate ? <Lock size={10} /> : <Globe size={10} />}
-                          {repo.isPrivate ? "Private" : "Public"}
-                        </span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400">
-                          {repo.language}
-                        </span>
+                      <div className="font-mono text-xs font-bold text-neutral-900 dark:text-white">
+                        {r.fullName}
                       </div>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-                        {repo.description}
-                      </p>
+                      <div className="text-[11px] text-neutral-500">{r.description}</div>
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <span className="text-xs font-mono text-neutral-500">
-                      {repo.openIssuesCount} open issues
-                    </span>
-                    <div className="text-[10px] text-neutral-400 mt-0.5">
-                      Team: {repo.defaultTeam}
-                    </div>
-                  </div>
-                </label>
+                  <span className="text-xs font-mono text-neutral-400">
+                    {r.openIssues} issues
+                  </span>
+                </div>
               );
             })}
           </div>
 
-          <div className="flex items-center justify-between pt-2">
+          <div className="pt-4 flex justify-between items-center">
             <button
-              type="button"
               onClick={() => setStep(1)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-neutral-300 dark:border-neutral-800 text-xs font-semibold"
+              className="px-4 py-2 rounded-xl metallic-badge text-xs font-semibold"
             >
-              <ArrowLeft size={14} />
-              <span>Back</span>
+              Back
             </button>
-
             <button
-              type="button"
-              disabled={selectedRepos.length === 0}
               onClick={() => setStep(3)}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 text-xs font-semibold disabled:opacity-50"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl metallic-btn text-xs font-semibold hover:scale-105 active:scale-95 transition-all"
             >
-              <span>Continue to Safety Thresholds</span>
-              <ArrowRight size={14} />
+              <span>Configure Safety Gates</span>
+              <ArrowRight size={15} />
             </button>
           </div>
         </div>
       )}
 
-      {/* STEP 3: Configure Safety Gate Thresholds */}
+      {/* Step 3: Safety Gates & Finish */}
       {step === 3 && (
-        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 sm:p-8 space-y-6">
-          <div>
-            <h2 className="text-lg font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-              <Sliders size={18} className="text-emerald-500" />
-              <span>Configure AI Decision Safety Gates</span>
-            </h2>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
-              Set the default confidence and escalation thresholds for your {selectedRepos.length} linked repositories. You can customize these per repository at any time.
-            </p>
-          </div>
+        <div className="p-8 rounded-2xl glass-card space-y-6">
+          <h2 className="text-lg font-bold text-neutral-900 dark:text-white">
+            3. Configure AI Confidence Safety Gates
+          </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-                  Minimum Auto-Label Confidence
-                </label>
-                <span className="font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">
+            <div className="space-y-2 p-4 rounded-xl metallic-card">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-neutral-500">Confidence Gate:</span>
+                <span className="font-bold text-indigo-600 dark:text-indigo-400">
                   {(minConfidence * 100).toFixed(0)}%
                 </span>
               </div>
               <input
                 type="range"
-                min={0.5}
-                max={0.95}
-                step={0.05}
+                min="0.5"
+                max="0.95"
+                step="0.05"
                 value={minConfidence}
                 onChange={(e) => setMinConfidence(parseFloat(e.target.value))}
-                className="w-full accent-neutral-900 dark:accent-white"
+                className="w-full accent-indigo-500 cursor-pointer"
               />
-              <p className="text-[11px] text-neutral-500">
-                Issues where Jev&apos;s category or severity confidence falls below{" "}
-                <strong>{(minConfidence * 100).toFixed(0)}%</strong> are held in the Human Review Inbox.
-              </p>
             </div>
 
-            <div className="p-5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/40 space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-neutral-700 dark:text-neutral-300">
-                  Critical P0 Escalation Threshold
-                </label>
-                <span className="font-mono text-sm font-bold text-rose-600 dark:text-rose-400">
+            <div className="space-y-2 p-4 rounded-xl metallic-card">
+              <div className="flex justify-between text-xs font-mono">
+                <span className="text-neutral-500">Escalation Threshold:</span>
+                <span className="font-bold text-rose-600 dark:text-rose-400">
                   {(escalationThreshold * 100).toFixed(0)}%
                 </span>
               </div>
               <input
                 type="range"
-                min={0.65}
-                max={0.95}
-                step={0.05}
+                min="0.6"
+                max="0.98"
+                step="0.02"
                 value={escalationThreshold}
                 onChange={(e) => setEscalationThreshold(parseFloat(e.target.value))}
-                className="w-full accent-neutral-900 dark:accent-white"
+                className="w-full accent-rose-500 cursor-pointer"
               />
-              <p className="text-[11px] text-neutral-500">
-                Issues with <code className="font-mono">noul</code> probability ≥{" "}
-                <strong>{(escalationThreshold * 100).toFixed(0)}%</strong> are marked{" "}
-                <code className="font-mono">priority:critical</code> and routed to Incident Response.
-              </p>
             </div>
           </div>
 
-          <div className="space-y-3 pt-2">
-            <label className="flex items-center gap-3 p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoSyncLabels}
-                onChange={(e) => setAutoSyncLabels(e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <div>
-                <div className="text-xs font-semibold text-neutral-900 dark:text-white">
-                  Automatically push labels to GitHub on high-confidence decisions
-                </div>
-                <div className="text-[11px] text-neutral-500">
-                  Applies <code className="font-mono">type:*</code> and <code className="font-mono">priority:*</code> labels via the GitHub REST API when needsReview is false.
-                </div>
-              </div>
-            </label>
-
-            <label className="flex items-center gap-3 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={syncInitialIssues}
-                onChange={(e) => setSyncInitialIssues(e.target.checked)}
-                className="h-4 w-4 rounded"
-              />
-              <div>
-                <div className="text-xs font-semibold text-neutral-900 dark:text-white">
-                  Import and triage open issues from linked repositories right now
-                </div>
-                <div className="text-[11px] text-neutral-500">
-                  Populates your Command Center and Review Inbox immediately so you can inspect decisions right away.
-                </div>
-              </div>
-            </label>
-          </div>
-
-          {errorMessage && (
-            <div className="p-4 rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400 flex items-start gap-3 text-xs leading-relaxed">
-              <AlertCircle size={18} className="shrink-0 mt-0.5 text-rose-500" />
-              <div className="space-y-1">
-                <div className="font-bold uppercase tracking-wider text-[11px]">
-                  Repository Linking Failed
-                </div>
-                <p>{errorMessage}</p>
-              </div>
-            </div>
-          )}
-
-          {submitting && statusText && (
-            <div className="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 flex items-center gap-2.5 text-xs font-mono text-neutral-600 dark:text-neutral-300">
-              <RefreshCw size={14} className="animate-spin text-emerald-500" />
-              <span>{statusText}</span>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between pt-2">
+          <div className="pt-4 flex justify-between items-center">
             <button
-              type="button"
               onClick={() => setStep(2)}
-              disabled={submitting}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-neutral-300 dark:border-neutral-800 text-xs font-semibold"
+              className="px-4 py-2 rounded-xl metallic-badge text-xs font-semibold"
             >
-              <ArrowLeft size={14} />
-              <span>Back</span>
+              Back
             </button>
-
             <button
-              type="button"
-              onClick={handleFinishOnboarding}
-              disabled={submitting}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 text-xs sm:text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
+              onClick={handleFinish}
+              disabled={finishing}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl metallic-btn text-xs font-semibold hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
             >
-              {submitting ? (
+              {finishing ? (
                 <>
-                  <RefreshCw size={15} className="animate-spin" />
-                  <span>Provisioning Workspace...</span>
+                  <RefreshCw size={15} className="animate-spin text-indigo-500" />
+                  <span>Finishing Setup...</span>
                 </>
               ) : (
                 <>
-                  <span>Complete Setup & Launch Workspace</span>
-                  <ArrowRight size={15} />
+                  <span>Complete Onboarding</span>
+                  <CheckCircle2 size={15} />
                 </>
               )}
             </button>

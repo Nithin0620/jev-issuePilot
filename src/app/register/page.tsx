@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ShieldCheck, ArrowRight, AlertCircle, User, Mail, Lock } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowRight, AlertCircle, User, Mail, Lock } from "lucide-react";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -28,21 +27,10 @@ export default function RegisterPage() {
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Unable to create account");
+        throw new Error(data.error || "Failed to create account");
       }
 
-      // Sign in automatically after creating account
-      const loginRes = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (loginRes?.error) {
-        window.location.href = "/login";
-      } else {
-        window.location.href = "/onboarding";
-      }
+      router.push("/dashboard");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Registration failed");
       setLoading(false);
@@ -50,86 +38,76 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-[85vh] flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 rounded-2xl p-8 shadow-sm">
-        <div className="flex flex-col items-center text-center mb-7">
-          <div className="w-12 h-12 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 flex items-center justify-center font-bold mb-4 shadow-xs">
-            <ShieldCheck size={24} />
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="w-full max-w-md p-8 rounded-2xl glass-card space-y-6">
+        <div className="text-center space-y-2">
+          <div className="mx-auto w-12 h-12 rounded-xl metallic-btn flex items-center justify-center font-black text-lg">
+            IP
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-neutral-50">
-            Create Your IssuePilot Workspace
+          <h1 className="text-2xl font-extrabold tracking-tight text-neutral-900 dark:text-white">
+            Create IssuePilot Account
           </h1>
-          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Connect GitHub repositories and automate issue triage in under 2 minutes
+          <p className="text-xs text-neutral-500">
+            Set up your organization admin credentials
           </p>
         </div>
 
         {error && (
-          <div className="mb-6 p-3 rounded-lg border border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-400 text-sm flex items-center gap-2">
-            <AlertCircle size={16} />
+          <div className="p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
+            <AlertCircle size={15} />
             <span>{error}</span>
           </div>
         )}
 
         <form onSubmit={handleRegister} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-1">
               Full Name
             </label>
             <div className="relative">
+              <User size={15} className="absolute left-3.5 top-3 text-neutral-400" />
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                minLength={2}
-                placeholder="Alex Rivera"
-                className="w-full px-3.5 py-2 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
-              />
-              <User
-                size={15}
-                className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none"
+                placeholder="Jane Doe"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl glass-input text-xs"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1.5">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-1">
               Work Email
             </label>
             <div className="relative">
+              <Mail size={15} className="absolute left-3.5 top-3 text-neutral-400" />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                placeholder="alex@acme.dev"
-                className="w-full px-3.5 py-2 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
-              />
-              <Mail
-                size={15}
-                className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none"
+                placeholder="jane@company.com"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl glass-input text-xs"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-600 dark:text-neutral-400 mb-1.5">
-              Password (min 6 chars)
+            <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-1">
+              Password
             </label>
             <div className="relative">
+              <Lock size={15} className="absolute left-3.5 top-3 text-neutral-400" />
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={6}
-                placeholder="••••••••"
-                className="w-full px-3.5 py-2 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
-              />
-              <Lock
-                size={15}
-                className="absolute right-3 top-2.5 text-neutral-400 pointer-events-none"
+                minLength={8}
+                placeholder="Minimum 8 characters"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl glass-input text-xs font-mono"
               />
             </div>
           </div>
@@ -137,20 +115,17 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 font-semibold text-sm hover:opacity-90 transition-opacity disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl metallic-btn text-xs font-semibold hover:scale-102 active:scale-98 transition-all disabled:opacity-50"
           >
-            {loading ? "Creating Workspace..." : "Create Account & Connect GitHub"}
-            <ArrowRight size={16} />
+            <span>{loading ? "Creating Account..." : "Create Account"}</span>
+            <ArrowRight size={14} />
           </button>
         </form>
 
-        <div className="mt-6 pt-5 border-t border-neutral-200 dark:border-neutral-800 flex items-center justify-between text-xs text-neutral-500">
-          <span>Already have an account?</span>
-          <Link
-            href="/login"
-            className="font-semibold text-neutral-900 dark:text-white hover:underline"
-          >
-            Sign in →
+        <div className="pt-2 text-center text-xs text-neutral-500">
+          Already have an account?{" "}
+          <Link href="/login" className="font-semibold text-indigo-500 hover:underline">
+            Sign in
           </Link>
         </div>
       </div>

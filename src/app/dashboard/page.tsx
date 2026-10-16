@@ -1,26 +1,24 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  LayoutDashboard,
   GitBranch,
-  AlertTriangle,
   CheckCircle2,
-  Sparkles,
-  RefreshCw,
+  AlertTriangle,
   ArrowRight,
-  Inbox,
   ShieldAlert,
-  Plus,
+  RefreshCw,
+  Sparkles,
+  Zap,
+  Activity,
+  Layers,
 } from "lucide-react";
 
-interface RepoItem {
+interface Repository {
   id: string;
   fullName: string;
-  language: string;
   webhookActive: boolean;
-  autoSyncLabels: boolean;
   minConfidence: number;
   escalationThreshold: number;
   triagedCount: number;
@@ -32,57 +30,54 @@ interface IssueItem {
   title: string;
   repository: string;
   githubIssueNumber?: number;
-  githubSynced?: boolean;
   category: string;
   categoryConfidence: number;
-  severity: number;
-  escalationProbability: number;
   priority: string;
-  suggestedTeam: string;
   needsReview: boolean;
   humanReviewed: boolean;
   humanCategory?: string;
   humanPriority?: string;
+  suggestedTeam: string;
   createdAt: string;
 }
 
 export default function DashboardPage() {
-  const [repos, setRepos] = useState<RepoItem[]>([]);
+  const [repos, setRepos] = useState<Repository[]>([]);
   const [issues, setIssues] = useState<IssueItem[]>([]);
-  const [pendingReviewCount, setPendingReviewCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [syncingRepoId, setSyncingRepoId] = useState<string | null>(null);
-  const [bootstrapping, setBootstrapping] = useState(false);
 
-  const loadWorkspaceData = useCallback(async () => {
-    setLoading(true);
+  const loadData = async () => {
     try {
       const [reposRes, issuesRes] = await Promise.all([
-        fetch("/api/repos").then((r) => r.json()),
-        fetch("/api/issues").then((r) => r.json()),
+        fetch("/api/repos"),
+        fetch("/api/issues"),
       ]);
-      setRepos(reposRes.repositories || []);
-      setIssues(issuesRes.issues || []);
-      setPendingReviewCount(issuesRes.pendingReviewCount || 0);
+      const reposData = await reposRes.json();
+      const issuesData = await issuesRes.json();
+
+      if (reposData?.repositories) setRepos(reposData.repositories);
+      if (issuesData?.issues) setIssues(issuesData.issues);
+    } catch (e) {
+      console.error("Failed to load dashboard data", e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      fetch("/api/repos").then((r) => r.json()),
-      fetch("/api/issues").then((r) => r.json()),
-    ])
-      .then(([reposRes, issuesRes]) => {
-        if (!active) return;
-        setRepos(reposRes.repositories || []);
-        setIssues(issuesRes.issues || []);
-        setPendingReviewCount(issuesRes.pendingReviewCount || 0);
-        setLoading(false);
+    Promise.all([fetch("/api/repos"), fetch("/api/issues")])
+      .then(async ([r1, r2]) => {
+        const d1 = await r1.json();
+        const d2 = await r2.json();
+        if (active) {
+          if (d1?.repositories) setRepos(d1.repositories);
+          if (d2?.issues) setIssues(d2.issues);
+        }
       })
-      .catch(() => {
+      .catch((e) => console.error(e))
+      .finally(() => {
         if (active) setLoading(false);
       });
     return () => {
@@ -93,192 +88,111 @@ export default function DashboardPage() {
   const handleSyncRepo = async (repoId: string) => {
     setSyncingRepoId(repoId);
     try {
-      await fetch(`/api/repos/${repoId}/sync`, { method: "POST" });
-      await loadWorkspaceData();
+      await fetch(`/api/repos/${repoId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync_issues" }),
+      });
+      await loadData();
+    } catch (e) {
+      console.error("Failed to sync repo", e);
     } finally {
       setSyncingRepoId(null);
     }
   };
 
-  const handleQuickBootstrapDemo = async () => {
-    setBootstrapping(true);
-    try {
-      const demoTargets = [
-        {
-          fullName: "acme-cloud/api-gateway",
-          description:
-            "High-throughput edge routing, rate-limiting, and JWT verification proxy",
-          language: "TypeScript",
-          defaultTeam: "Platform & Infra",
-        },
-      ];
-
-      for (const item of demoTargets) {
-        const res = await fetch("/api/repos", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...item,
-            connectionMode: "demo",
-            minConfidence: 0.75,
-            escalationThreshold: 0.85,
-            autoSyncLabels: true,
-          }),
-        });
-        const created = await res.json();
-        if (created?.repository?.id) {
-          await fetch(`/api/repos/${created.repository.id}/sync`, { method: "POST" });
-        }
-      }
-
-      await fetch("/api/workspace", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          githubConnected: true,
-          githubConnectionMode: "demo",
-          onboardingCompleted: true,
-        }),
-      });
-
-      await loadWorkspaceData();
-    } finally {
-      setBootstrapping(false);
-    }
-  };
-
-  const totalTriaged = issues.length;
+  const pendingReviewCount = issues.filter((i) => i.needsReview && !i.humanReviewed).length;
   const criticalCount = issues.filter(
     (i) => (i.humanPriority || i.priority) === "critical"
   ).length;
-  const autoRoutedCount = issues.filter((i) => !i.needsReview).length;
-  const autoRoutedRate =
-    totalTriaged > 0 ? Math.round((autoRoutedCount / totalTriaged) * 100) : 100;
+  const autoRoutedRate = issues.length
+    ? Math.round(((issues.length - pendingReviewCount) / issues.length) * 100)
+    : 100;
+
+  if (loading) {
+    return (
+      <div className="p-8 flex items-center justify-center min-h-[60vh]">
+        <div className="flex items-center gap-3 text-neutral-500 font-mono text-xs metallic-badge px-4 py-2.5 rounded-full">
+          <RefreshCw size={16} className="animate-spin text-indigo-500" />
+          <span>Loading IssuePilot Operations Dashboard...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-8">
-      {/* Page Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Top Banner & Overview */}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200/50 dark:border-neutral-800/60 pb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-neutral-900 dark:text-white flex items-center gap-2.5">
-            <LayoutDashboard size={26} />
-            <span>Workspace Command Center</span>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-neutral-900 dark:text-white flex items-center gap-3">
+            <Activity className="text-indigo-500" size={28} />
+            <span>AI Decision Operations Center</span>
           </h1>
           <p className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-            Real-time overview of connected GitHub repositories, Jev 1.13 triage decisions, and safety review gates.
+            Real-time GitHub triage stream, confidence gate statistics, and routing policies.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={loadWorkspaceData}
-            className="p-2 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-            title="Refresh workspace"
-          >
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-          </button>
-          <Link
-            href="/repos"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-xs font-semibold hover:bg-neutral-50 dark:hover:bg-neutral-800"
-          >
-            <Plus size={14} />
-            <span>Link Repository</span>
-          </Link>
+        <div className="flex items-center gap-3">
           <Link
             href="/playground"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 text-xs font-semibold hover:opacity-90"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl metallic-btn text-xs font-semibold hover:scale-105 active:scale-95 transition-all"
           >
             <Sparkles size={14} />
-            <span>New Triage</span>
+            <span>Simulate Triage</span>
           </Link>
+          <button
+            onClick={loadData}
+            type="button"
+            className="p-2 rounded-xl metallic-badge text-neutral-600 dark:text-neutral-300 hover:scale-105 active:scale-95 transition-all"
+            title="Refresh Dashboard Data"
+          >
+            <RefreshCw size={15} />
+          </button>
         </div>
       </div>
 
-      {/* Onboarding Callout Banner when no repos are linked yet */}
-      {!loading && repos.length === 0 && (
-        <div className="rounded-2xl border-2 border-emerald-500/40 bg-emerald-500/5 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 text-xs font-mono uppercase font-bold text-emerald-600 dark:text-emerald-400">
-              <GitBranch size={14} />
-              <span>GitHub Integration Not Linked Yet</span>
-            </div>
-            <h2 className="text-lg font-bold text-neutral-900 dark:text-white">
-              Connect your GitHub repositories to start automated issue triage
-            </h2>
-            <p className="text-xs text-neutral-600 dark:text-neutral-400 max-w-2xl">
-              Use the 3-step Onboarding Wizard to connect a GitHub Personal Access Token, or click below to instantly provision 3 demo microservices and triage their open issues.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={handleQuickBootstrapDemo}
-              disabled={bootstrapping}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 text-xs font-semibold hover:opacity-90 disabled:opacity-50"
-            >
-              {bootstrapping ? (
-                <>
-                  <RefreshCw size={14} className="animate-spin" />
-                  <span>Provisioning Demo Repos...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles size={14} />
-                  <span>1-Click Provision Demo Repos & Issues</span>
-                </>
-              )}
-            </button>
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs font-semibold"
-            >
-              <span>Open Setup Wizard</span>
-              <ArrowRight size={14} />
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 space-y-2">
-          <div className="flex items-center justify-between text-xs text-neutral-500">
-            <span>Total Triaged Issues</span>
-            <Sparkles size={15} className="text-neutral-400" />
+      {/* Overview Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="p-5 rounded-2xl glass-card space-y-2">
+          <div className="flex items-center justify-between text-xs text-neutral-500 font-medium">
+            <span>Total Issues Triaged</span>
+            <Layers size={16} className="text-indigo-500" />
           </div>
           <div className="text-3xl font-extrabold font-mono text-neutral-900 dark:text-white">
-            {totalTriaged}
+            {issues.length}
           </div>
           <div className="text-[11px] text-neutral-400">
-            Processed via Jev structured decision engine
+            Across {repos.length} linked repositories
           </div>
         </div>
 
         <Link
           href="/inbox?needsReview=true"
-          className="p-5 rounded-2xl border border-amber-500/30 bg-white dark:bg-neutral-950 hover:border-amber-500/60 transition-colors space-y-2"
+          className="p-5 rounded-2xl glass-card space-y-2 group hover:border-amber-500/50 transition-all"
         >
-          <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400 font-semibold">
-            <span>Pending Human Review</span>
-            <Inbox size={15} />
+          <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400 font-medium">
+            <span>Pending Review Gate</span>
+            <AlertTriangle size={16} className="text-amber-500" />
           </div>
-          <div className="text-3xl font-extrabold font-mono text-neutral-900 dark:text-white">
-            {pendingReviewCount}
+          <div className="text-3xl font-extrabold font-mono text-amber-600 dark:text-amber-400 flex items-center justify-between">
+            <span>{pendingReviewCount}</span>
+            <span className="text-xs font-sans font-normal opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 text-amber-500">
+              Review <ArrowRight size={12} />
+            </span>
           </div>
-          <div className="text-[11px] text-amber-600/80 dark:text-amber-400/80 flex items-center gap-1">
-            <span>Open Review Inbox</span>
-            <ArrowRight size={11} />
+          <div className="text-[11px] text-neutral-400">
+            Low confidence or borderline escalation risk
           </div>
         </Link>
 
-        <div className="p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 space-y-2">
-          <div className="flex items-center justify-between text-xs text-neutral-500">
+        <div className="p-5 rounded-2xl glass-card space-y-2">
+          <div className="flex items-center justify-between text-xs text-neutral-500 font-medium">
             <span>Auto-Routed Confidence Rate</span>
-            <CheckCircle2 size={15} className="text-emerald-500" />
+            <CheckCircle2 size={16} className="text-emerald-500" />
           </div>
-          <div className="text-3xl font-extrabold font-mono text-neutral-900 dark:text-white">
+          <div className="text-3xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
             {autoRoutedRate}%
           </div>
           <div className="text-[11px] text-neutral-400">
@@ -286,12 +200,12 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 space-y-2">
-          <div className="flex items-center justify-between text-xs text-neutral-500">
+        <div className="p-5 rounded-2xl glass-card space-y-2">
+          <div className="flex items-center justify-between text-xs text-neutral-500 font-medium">
             <span>Critical (P0) Escalations</span>
-            <ShieldAlert size={15} className="text-rose-500" />
+            <ShieldAlert size={16} className="text-rose-500" />
           </div>
-          <div className="text-3xl font-extrabold font-mono text-neutral-900 dark:text-white">
+          <div className="text-3xl font-extrabold font-mono text-rose-600 dark:text-rose-400">
             {criticalCount}
           </div>
           <div className="text-[11px] text-neutral-400">
@@ -300,14 +214,14 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Main Two-Column Grid: Connected Repos + Recent Decisions */}
+      {/* Main Grid: Connected Repos + Recent Decisions */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Linked Repositories */}
-        <div className="lg:col-span-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 space-y-4">
+        <div className="lg:col-span-5 rounded-2xl glass-card p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                <GitBranch size={17} />
+                <GitBranch size={17} className="text-indigo-500" />
                 <span>Linked Repositories ({repos.length})</span>
               </h2>
               <p className="text-xs text-neutral-500 mt-0.5">
@@ -316,18 +230,18 @@ export default function DashboardPage() {
             </div>
             <Link
               href="/repos"
-              className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 hover:underline"
+              className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
             >
               Manage All →
             </Link>
           </div>
 
           {repos.length === 0 ? (
-            <div className="py-10 text-center border border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl p-4 space-y-2">
+            <div className="py-10 text-center border border-dashed border-neutral-300 dark:border-neutral-800 rounded-xl p-4 space-y-2">
               <p className="text-xs text-neutral-500">No repositories linked yet.</p>
               <Link
                 href="/onboarding"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 text-xs font-semibold"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl metallic-btn text-xs font-semibold"
               >
                 <span>Connect GitHub Repos</span>
               </Link>
@@ -337,7 +251,7 @@ export default function DashboardPage() {
               {repos.map((repo) => (
                 <div
                   key={repo.id}
-                  className="p-3.5 rounded-xl border border-neutral-200 dark:border-neutral-800/90 hover:border-neutral-300 dark:hover:border-neutral-700 transition-colors space-y-2.5"
+                  className="p-3.5 rounded-xl metallic-card space-y-2.5 transition-all hover:scale-101"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-mono text-xs font-bold text-neutral-900 dark:text-white truncate">
@@ -347,11 +261,11 @@ export default function DashboardPage() {
                       type="button"
                       onClick={() => handleSyncRepo(repo.id)}
                       disabled={syncingRepoId === repo.id}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800 text-[11px] font-medium transition-colors"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg metallic-badge text-[11px] font-medium transition-colors"
                     >
                       <RefreshCw
                         size={11}
-                        className={syncingRepoId === repo.id ? "animate-spin" : ""}
+                        className={syncingRepoId === repo.id ? "animate-spin text-indigo-500" : ""}
                       />
                       <span>{syncingRepoId === repo.id ? "Syncing..." : "Sync Issues"}</span>
                     </button>
@@ -376,11 +290,12 @@ export default function DashboardPage() {
         </div>
 
         {/* Right: Recent Triage Stream */}
-        <div className="lg:col-span-7 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 space-y-4">
+        <div className="lg:col-span-7 rounded-2xl glass-card p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-base font-bold text-neutral-900 dark:text-white">
-                Recent Triage Decisions
+              <h2 className="text-base font-bold text-neutral-900 dark:text-white flex items-center gap-2">
+                <Zap size={17} className="text-amber-500" />
+                <span>Recent Triage Decisions</span>
               </h2>
               <p className="text-xs text-neutral-500 mt-0.5">
                 Latest issues classified by Jev 1.13 across all repositories
@@ -388,33 +303,33 @@ export default function DashboardPage() {
             </div>
             <Link
               href="/inbox"
-              className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 hover:underline"
+              className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
             >
               Open Full Inbox →
             </Link>
           </div>
 
           {issues.length === 0 ? (
-            <div className="py-12 text-center border border-dashed border-neutral-200 dark:border-neutral-800 rounded-xl p-6 space-y-2">
+            <div className="py-12 text-center border border-dashed border-neutral-300 dark:border-neutral-800 rounded-xl p-6 space-y-2">
               <p className="text-xs text-neutral-500">
                 No issues have been triaged yet.
               </p>
               <Link
                 href="/playground"
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 text-xs font-semibold"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg metallic-btn text-xs font-semibold"
               >
                 <span>Run a Triage in Playground</span>
               </Link>
             </div>
           ) : (
-            <div className="divide-y divide-neutral-200 dark:divide-neutral-800">
+            <div className="divide-y divide-neutral-200/50 dark:divide-neutral-800/60">
               {issues.slice(0, 7).map((issue) => {
                 const effectivePriority = issue.humanPriority || issue.priority;
                 const effectiveCategory = issue.humanCategory || issue.category;
                 return (
                   <div
                     key={issue.id}
-                    className="py-3 flex items-center justify-between gap-4"
+                    className="py-3 flex items-center justify-between gap-4 hover:bg-neutral-100/50 dark:hover:bg-neutral-900/30 px-2 rounded-lg transition-colors"
                   >
                     <div className="min-w-0 space-y-1">
                       <div className="flex items-center gap-2">
@@ -440,10 +355,10 @@ export default function DashboardPage() {
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
                           effectivePriority === "critical"
-                            ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                            ? "bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/40"
                             : effectivePriority === "high"
-                            ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
-                            : "bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-800"
+                            ? "bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40"
+                            : "metallic-badge"
                         }`}
                       >
                         {effectivePriority}
@@ -452,7 +367,7 @@ export default function DashboardPage() {
                       {issue.needsReview && !issue.humanReviewed ? (
                         <Link
                           href="/inbox?needsReview=true"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[11px] font-semibold"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-500/40 text-[11px] font-semibold hover:scale-105 transition-all"
                         >
                           <AlertTriangle size={11} />
                           <span>Review</span>

@@ -11,34 +11,41 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
 
-  const [email, setEmail] = useState("admin@issuepilot.local");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleCredentialsLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!email.trim() || !password) return;
     setLoading(true);
     setError(null);
 
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    try {
+      const res = await signIn("credentials", {
+        email: email.trim().toLowerCase(),
+        password,
+        redirect: false,
+      });
 
-    setLoading(false);
-    if (res?.error) {
-      setError("Invalid email or password");
-    } else {
-      router.push(callbackUrl);
-      router.refresh();
+      if (res?.error) {
+        setLoading(false);
+        setError("Invalid email or password");
+      } else if (res?.ok) {
+        // Full page redirect ensures session cookie is committed before route-guard checks
+        window.location.href = callbackUrl;
+      } else {
+        setLoading(false);
+        setError("Login failed. Please try again.");
+      }
+    } catch {
+      setLoading(false);
+      setError("An unexpected error occurred during sign in.");
     }
   };
 
   const handleQuickDemoLogin = async () => {
-    setEmail("admin@issuepilot.local");
-    setPassword("admin123");
     setLoading(true);
     setError(null);
 
@@ -48,10 +55,12 @@ function LoginForm() {
       redirect: false,
     });
 
-    setLoading(false);
-    if (!res?.error) {
-      router.push(callbackUrl === "/dashboard" ? "/onboarding" : callbackUrl);
-      router.refresh();
+    if (res?.error) {
+      setLoading(false);
+      setError("Demo login failed");
+    } else if (res?.ok) {
+      const target = callbackUrl === "/dashboard" ? "/onboarding" : callbackUrl;
+      window.location.href = target;
     }
   };
 
@@ -136,6 +145,8 @@ function LoginForm() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
+            placeholder="name@company.com"
             className="w-full px-3.5 py-2 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
           />
         </div>
@@ -150,6 +161,8 @@ function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
+              placeholder="••••••••"
               className="w-full px-3.5 py-2 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600"
             />
             <Lock

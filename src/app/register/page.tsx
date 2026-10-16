@@ -39,10 +39,9 @@ export default function RegisterPage() {
       });
 
       if (loginRes?.error) {
-        router.push("/login");
+        window.location.href = "/login";
       } else {
-        router.push("/onboarding");
-        router.refresh();
+        window.location.href = "/onboarding";
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Registration failed");

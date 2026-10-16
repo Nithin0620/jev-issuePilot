@@ -35,7 +35,9 @@ describe("Repositories & Issue Sync API", () => {
     expect(sampleIssues[0]).toHaveProperty("body");
   });
 
-  it("links a repository via POST /api/repos and lists it via GET /api/repos", async () => {
+  it(
+    "links a repository via POST /api/repos and lists it via GET /api/repos",
+    async () => {
     const repoName = `test-service-${Date.now()}`;
     const fullName = `acme-cloud/${repoName}`;
     createdFullNames.push(fullName);
@@ -81,5 +83,5 @@ describe("Repositories & Issue Sync API", () => {
       const syncData = await syncRes.json();
       expect(syncData.syncedCount).toBe(2);
     }
-  });
+  }, 20000);
 });

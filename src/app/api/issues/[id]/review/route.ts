@@ -41,6 +41,11 @@ export async function PATCH(
 
     let isGithubSynced = current.githubSynced;
 
+    const ws = await db.workspaceConfig
+      .findUnique({ where: { id: "default" } })
+      .catch(() => null);
+    const token = ws?.githubToken || process.env.GITHUB_TOKEN || undefined;
+
     // Push confirmed labels to GitHub if issue has GitHub number and repository
     if (current.githubIssueNumber && current.repository && current.repository.includes("/")) {
       const [owner, repo] = current.repository.split("/");
@@ -50,6 +55,7 @@ export async function PATCH(
           repo,
           issueNumber: current.githubIssueNumber,
           labels: finalLabels,
+          token,
         });
         if (syncRes.success) {
           isGithubSynced = true;

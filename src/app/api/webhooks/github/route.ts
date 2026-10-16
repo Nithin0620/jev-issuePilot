@@ -75,6 +75,11 @@ export async function POST(request: Request) {
 
     const policy = applyPolicy(triageResult.answers);
 
+    const ws = await db.workspaceConfig
+      .findUnique({ where: { id: "default" } })
+      .catch(() => null);
+    const token = ws?.githubToken || process.env.GITHUB_TOKEN || undefined;
+
     // 5. Automated Label Synchronization for High Confidence
     let isSynced = false;
     if (!policy.needsReview && owner !== "unknown") {
@@ -83,6 +88,7 @@ export async function POST(request: Request) {
         repo: repoName,
         issueNumber,
         labels: policy.suggestedLabels,
+        token,
       });
       isSynced = syncResult.success;
     }

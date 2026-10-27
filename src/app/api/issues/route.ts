@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getOrSetCache } from "@/lib/cache";
 
+async function getCustomRepoCount(): Promise<number> {
+  return getOrSetCache("custom_repo_count", async () => {
+    return db.repository
+      .count({
+        where: {
+          fullName: { not: "acme-cloud/api-gateway" },
+          connectionMode: { not: "demo" },
+        },
+      })
+      .catch(() => 0);
+  }, 30_000);
+}
 
 export async function GET(request: Request) {
   try {
@@ -9,14 +22,7 @@ export async function GET(request: Request) {
     const repoFilter = searchParams.get("repository");
     const priorityFilter = searchParams.get("priority");
 
-    const customRepoCount = await db.repository
-      .count({
-        where: {
-          fullName: { not: "acme-cloud/api-gateway" },
-          connectionMode: { not: "demo" },
-        },
-      })
-      .catch(() => 0);
+    const customRepoCount = await getCustomRepoCount();
 
     const whereClause: Record<string, unknown> = {};
     if (needsReviewOnly) {
@@ -32,23 +38,26 @@ export async function GET(request: Request) {
       whereClause.priority = priorityFilter;
     }
 
-    const issues = await db.issue.findMany({
-      where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    });
+    const pendingWhereClause = {
+      needsReview: true,
+      humanReviewed: false,
+      ...(customRepoCount > 0 && (!repoFilter || repoFilter === "all")
+        ? { repository: { not: "acme-cloud/api-gateway" } }
+        : repoFilter && repoFilter !== "all"
+        ? { repository: repoFilter }
+        : {}),
+    };
 
-    const pendingReviewCount = await db.issue.count({
-      where: {
-        needsReview: true,
-        humanReviewed: false,
-        ...(customRepoCount > 0 && (!repoFilter || repoFilter === "all")
-          ? { repository: { not: "acme-cloud/api-gateway" } }
-          : repoFilter && repoFilter !== "all"
-          ? { repository: repoFilter }
-          : {}),
-      },
-    });
+    const [issues, pendingReviewCount] = await Promise.all([
+      db.issue.findMany({
+        where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }),
+      db.issue.count({
+        where: pendingWhereClause,
+      }),
+    ]);
 
     return NextResponse.json({
       issues,

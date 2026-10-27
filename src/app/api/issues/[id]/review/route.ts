@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { addLabelsToGitHubIssue } from "@/lib/github";
+import { getWorkspaceConfig } from "@/app/api/workspace/route";
 
 const ReviewSchema = z.object({
   action: z.enum(["approve", "override"]),
@@ -41,12 +42,9 @@ export async function PATCH(
 
     let isGithubSynced = current.githubSynced;
 
-    const ws = await db.workspaceConfig
-      .findUnique({ where: { id: "default" } })
-      .catch(() => null);
+    const ws = await getWorkspaceConfig();
     const token = ws?.githubToken || process.env.GITHUB_TOKEN || undefined;
 
-    // Push confirmed labels to GitHub if issue has GitHub number and repository
     if (current.githubIssueNumber && current.repository && current.repository.includes("/")) {
       const [owner, repo] = current.repository.split("/");
       if (owner && repo) {

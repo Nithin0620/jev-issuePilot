@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { fetchGitHubRepositories } from "@/lib/github";
+import { getOrSetCache, invalidateCache } from "@/lib/cache";
 
 const UpdateWorkspaceSchema = z.object({
   organizationName: z.string().min(2).max(100).optional(),
@@ -14,6 +15,34 @@ const UpdateWorkspaceSchema = z.object({
   defaultEscalation: z.number().min(0.5).max(0.99).optional(),
   autoSyncLabels: z.boolean().optional(),
 });
+
+export async function getWorkspaceConfig() {
+  return getOrSetCache("workspace_config", async () => {
+    let dbConfig = null;
+    try {
+      dbConfig = await db.workspaceConfig.findUnique({
+        where: { id: "default" },
+      });
+      if (!dbConfig) {
+        dbConfig = await db.workspaceConfig.create({
+          data: {
+            id: "default",
+            organizationName: "Acme Cloud Engineering",
+            githubConnected: Boolean(process.env.GITHUB_TOKEN),
+            githubConnectionMode: process.env.GITHUB_TOKEN ? "pat" : "none",
+            githubUsername: "acme-cloud",
+            defaultMinConfidence: 0.75,
+            defaultEscalation: 0.85,
+            autoSyncLabels: true,
+          },
+        });
+      }
+    } catch {
+      // Fallback to null if DB is unavailable
+    }
+    return dbConfig;
+  }, 60_000);
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -32,28 +61,13 @@ export async function GET(request: Request) {
     autoSyncLabels: true,
   };
 
-  let dbConfig = null;
-  try {
-    dbConfig = await db.workspaceConfig.upsert({
-      where: { id: "default" },
-      update: {},
-      create: {
-        id: "default",
-        organizationName: "Acme Cloud Engineering",
-        githubConnected: Boolean(process.env.GITHUB_TOKEN),
-        githubConnectionMode: process.env.GITHUB_TOKEN ? "pat" : "none",
-        githubUsername: "acme-cloud",
-        defaultMinConfidence: 0.75,
-        defaultEscalation: 0.85,
-        autoSyncLabels: true,
-      },
-    });
+  const dbConfig = await getWorkspaceConfig();
+
+  if (dbConfig) {
     config = {
       ...dbConfig,
       githubUsername: dbConfig.githubUsername ?? "acme-cloud",
     };
-  } catch {
-    // Fallback to default config if DB is unavailable
   }
 
   try {
@@ -64,7 +78,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       config: {
         ...config,
-        githubToken: undefined, // Do not leak raw token to frontend
+        githubToken: undefined,
       },
       catalog: catalog.repositories,
       catalogMode: catalog.mode,
@@ -152,6 +166,8 @@ export async function PATCH(request: Request) {
           autoSyncLabels: data.autoSyncLabels ?? true,
         },
       });
+
+      invalidateCache("workspace_config");
 
       return NextResponse.json({
         config: {

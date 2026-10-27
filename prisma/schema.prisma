@@ -97,6 +97,9 @@ model Issue {
 
   @@index([needsReview, humanReviewed])
   @@index([createdAt])
+  @@index([repository])
+  @@index([category])
+  @@index([priority])
 }
 
 model Repository {
@@ -132,4 +135,3 @@ model WorkspaceConfig {
   autoSyncLabels       Boolean  @default(true)
   updatedAt            DateTime @updatedAt
 }
-

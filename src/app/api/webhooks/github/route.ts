@@ -7,6 +7,7 @@ import {
 import { classifyIssue } from "@/lib/jev";
 import { applyPolicy } from "@/lib/policy";
 import { db } from "@/lib/db";
+import { getWorkspaceConfig } from "@/app/api/workspace/route";
 
 export async function POST(request: Request) {
   try {
@@ -15,7 +16,6 @@ export async function POST(request: Request) {
     const event = request.headers.get("x-github-event");
     const deliveryId = request.headers.get("x-github-delivery");
 
-    // 1. Signature Verification
     if (process.env.GITHUB_WEBHOOK_SECRET) {
       const isValid = verifyGitHubWebhookSignature(rawBody, signature);
       if (!isValid) {
@@ -26,7 +26,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Only process issue events
     if (event !== "issues") {
       return NextResponse.json(
         { status: "ignored", message: `Event ${event} is not supported` },
@@ -36,7 +35,6 @@ export async function POST(request: Request) {
 
     const payload: GitHubWebhookPayload = JSON.parse(rawBody);
 
-    // Only triage when an issue is newly opened
     if (payload.action !== "opened" || !payload.issue) {
       return NextResponse.json(
         { status: "ignored", message: `Action ${payload.action} not triaged` },
@@ -49,7 +47,6 @@ export async function POST(request: Request) {
     const owner = payload.repository?.owner?.login ?? "unknown";
     const issueNumber = payload.issue.number;
 
-    // 3. Deduplication Check via X-GitHub-Delivery
     if (deliveryId) {
       try {
         const existing = await db.issue.findUnique({
@@ -66,7 +63,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Run AI Triage
     const triageResult = await classifyIssue({
       title: payload.issue.title,
       body: payload.issue.body || "",
@@ -75,12 +71,9 @@ export async function POST(request: Request) {
 
     const policy = applyPolicy(triageResult.answers);
 
-    const ws = await db.workspaceConfig
-      .findUnique({ where: { id: "default" } })
-      .catch(() => null);
+    const ws = await getWorkspaceConfig();
     const token = ws?.githubToken || process.env.GITHUB_TOKEN || undefined;
 
-    // 5. Automated Label Synchronization for High Confidence
     let isSynced = false;
     if (!policy.needsReview && owner !== "unknown") {
       const syncResult = await addLabelsToGitHubIssue({
@@ -93,7 +86,6 @@ export async function POST(request: Request) {
       isSynced = syncResult.success;
     }
 
-    // 6. Persist to PostgreSQL
     let savedId: string | null = null;
     try {
       const saved = await db.issue.create({

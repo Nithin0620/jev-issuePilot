@@ -68,7 +68,7 @@ export function IssueForm({
   };
 
   return (
-    <div className="w-full rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 sm:p-8 shadow-sm">
+    <div className="w-full rounded-2xl glass-card p-6 sm:p-8">
       <div className="mb-6">
         <h2 className="text-lg font-bold text-neutral-900 dark:text-neutral-100 flex items-center gap-2">
           <span>Submit Issue for AI Triage</span>
@@ -80,14 +80,14 @@ export function IssueForm({
         {/* Preset Selectors */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span className="text-xs font-mono text-neutral-400 mr-1 flex items-center gap-1">
-            <Sparkles size={12} /> Presets:
+            <Sparkles size={12} className="text-amber-500" /> Presets:
           </span>
           {PRESETS.map((p, idx) => (
             <button
               key={idx}
               type="button"
               onClick={() => applyPreset(p)}
-              className="px-2.5 py-1 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:border-neutral-400 dark:hover:border-neutral-600 bg-neutral-50 dark:bg-neutral-900 text-xs font-medium text-neutral-700 dark:text-neutral-300 transition-all hover:scale-102 active:scale-98"
+              className="px-3 py-1 rounded-lg metallic-badge text-xs font-medium transition-all hover:scale-105 active:scale-95"
             >
               {p.label}
             </button>
@@ -96,7 +96,7 @@ export function IssueForm({
       </div>
 
       {error && (
-        <div className="mb-6 p-3 rounded-xl border border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400 text-xs">
+        <div className="mb-6 p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400 text-xs">
           {error}
         </div>
       )}
@@ -115,7 +115,7 @@ export function IssueForm({
               minLength={5}
               maxLength={200}
               placeholder="e.g. Production login fails with HTTP 500"
-              className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600 font-medium"
+              className="w-full px-3.5 py-2.5 rounded-xl glass-input text-neutral-900 dark:text-neutral-100 text-sm font-medium"
             />
           </div>
 
@@ -128,7 +128,7 @@ export function IssueForm({
               value={repository}
               onChange={(e) => setRepository(e.target.value)}
               placeholder="e.g. org/repo-name"
-              className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600 font-mono text-xs"
+              className="w-full px-3.5 py-2.5 rounded-xl glass-input text-neutral-900 dark:text-neutral-100 text-sm font-mono text-xs"
             />
           </div>
         </div>
@@ -145,19 +145,19 @@ export function IssueForm({
             maxLength={8000}
             rows={5}
             placeholder="Detailed description of the issue or feature request..."
-            className="w-full px-3.5 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600 resize-y"
+            className="w-full px-3.5 py-2.5 rounded-xl glass-input text-neutral-900 dark:text-neutral-100 text-sm resize-y"
           />
         </div>
 
         <div className="pt-2 flex items-center justify-between">
-          <span className="text-xs text-neutral-400">
+          <span className="text-xs text-neutral-400 font-mono">
             Calls typed Jev decision model with calibrated confidence rating
           </span>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-neutral-950 font-semibold text-sm hover:opacity-90 active:scale-98 transition-all disabled:opacity-50 shadow-sm"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl metallic-btn text-sm font-semibold hover:opacity-90 active:scale-98 transition-all disabled:opacity-50"
           >
             {isLoading ? (
               <>

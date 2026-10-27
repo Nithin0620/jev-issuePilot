@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { DEMO_GITHUB_REPOS } from "@/lib/github";
+import { invalidateCache } from "@/lib/cache";
 
 const CreateRepoSchema = z.object({
   fullName: z.string().trim().min(3).max(200),
@@ -18,20 +19,20 @@ const CreateRepoSchema = z.object({
 
 export async function GET() {
   try {
-    const repos = await db.repository.findMany({
-      orderBy: { createdAt: "desc" },
-    });
-
-    const issueCounts = await db.issue.groupBy({
-      by: ["repository"],
-      _count: { repository: true },
-    });
-
-    const pendingCounts = await db.issue.groupBy({
-      by: ["repository"],
-      where: { needsReview: true, humanReviewed: false },
-      _count: { repository: true },
-    });
+    const [repos, issueCounts, pendingCounts] = await Promise.all([
+      db.repository.findMany({
+        orderBy: { createdAt: "desc" },
+      }),
+      db.issue.groupBy({
+        by: ["repository"],
+        _count: { repository: true },
+      }),
+      db.issue.groupBy({
+        by: ["repository"],
+        where: { needsReview: true, humanReviewed: false },
+        _count: { repository: true },
+      }),
+    ]);
 
     const countMap = new Map(
       issueCounts.map((item) => [item.repository || "default", item._count.repository])
@@ -85,7 +86,6 @@ export async function POST(request: Request) {
     const normalizedFullName = `${owner}/${name}`;
 
     try {
-      // If user connects a real custom repo, purge demo repo and its dummy issues
       if (
         normalizedFullName !== "acme-cloud/api-gateway" &&
         data.connectionMode !== "demo"
@@ -132,6 +132,9 @@ export async function POST(request: Request) {
           defaultTeam: data.defaultTeam,
         },
       });
+
+      invalidateCache("repo_");
+      invalidateCache("custom_repo_count");
 
       return NextResponse.json({ repository: repo }, { status: 201 });
     } catch (upsertError) {

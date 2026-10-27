@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getOrSetCache } from "@/lib/cache";
 
-export async function GET() {
-  try {
-    const customRepoCount = await db.repository
+async function getCustomRepoCount(): Promise<number> {
+  return getOrSetCache("custom_repo_count", async () => {
+    return db.repository
       .count({
         where: {
           fullName: { not: "acme-cloud/api-gateway" },
@@ -11,39 +12,44 @@ export async function GET() {
         },
       })
       .catch(() => 0);
+  }, 30_000);
+}
+
+export async function GET() {
+  try {
+    const customRepoCount = await getCustomRepoCount();
 
     const baseWhere =
       customRepoCount > 0
         ? { repository: { not: "acme-cloud/api-gateway" } }
         : undefined;
 
-    const totalIssues = await db.issue.count({ where: baseWhere });
-    const needsReviewCount = await db.issue.count({
-      where: { ...baseWhere, needsReview: true },
-    });
-    const humanReviewedCount = await db.issue.count({
-      where: { ...baseWhere, humanReviewed: true },
-    });
-
-    // Category distribution
-    const categoryGroups = await db.issue.groupBy({
-      by: ["category"],
-      where: baseWhere,
-      _count: { category: true },
-    });
-
-    // Priority distribution
-    const priorityGroups = await db.issue.groupBy({
-      by: ["priority"],
-      where: baseWhere,
-      _count: { priority: true },
-    });
-
-    // Check human overrides agreement
-    const reviewedIssues = await db.issue.findMany({
-      where: { ...baseWhere, humanReviewed: true },
-      select: { category: true, humanCategory: true },
-    });
+    const [
+      totalIssues,
+      needsReviewCount,
+      humanReviewedCount,
+      categoryGroups,
+      priorityGroups,
+      reviewedIssues,
+    ] = await Promise.all([
+      db.issue.count({ where: baseWhere }),
+      db.issue.count({ where: { ...baseWhere, needsReview: true } }),
+      db.issue.count({ where: { ...baseWhere, humanReviewed: true } }),
+      db.issue.groupBy({
+        by: ["category"],
+        where: baseWhere,
+        _count: { category: true },
+      }),
+      db.issue.groupBy({
+        by: ["priority"],
+        where: baseWhere,
+        _count: { priority: true },
+      }),
+      db.issue.findMany({
+        where: { ...baseWhere, humanReviewed: true },
+        select: { category: true, humanCategory: true },
+      }),
+    ]);
 
     let agreedCount = 0;
     for (const item of reviewedIssues) {

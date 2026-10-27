@@ -4,6 +4,7 @@ import { classifyIssue } from "@/lib/jev";
 import { applyPolicy } from "@/lib/policy";
 import { db } from "@/lib/db";
 import { checkRateLimit } from "@/lib/ratelimit";
+import { getOrSetCache } from "@/lib/cache";
 
 const IssueSchema = z.object({
   title: z.string().trim().min(5, "Title must be at least 5 characters").max(200),
@@ -50,9 +51,13 @@ export async function POST(request: Request) {
     } = {};
 
     try {
-      const linkedRepo = await db.repository.findUnique({
-        where: { fullName: parsed.data.repository },
-      });
+      const repoName = parsed.data.repository;
+      const linkedRepo = await getOrSetCache(`repo_${repoName}`, async () => {
+        return db.repository.findUnique({
+          where: { fullName: repoName },
+        });
+      }, 60_000);
+
       if (linkedRepo) {
         repoOptions = {
           minConfidence: linkedRepo.minConfidence,
@@ -66,7 +71,6 @@ export async function POST(request: Request) {
 
     const policy = applyPolicy(triageResult.answers, repoOptions);
 
-    // Persist to PostgreSQL (if DB is configured & online)
     let savedId: string | null = null;
     try {
       const saved = await db.issue.create({
